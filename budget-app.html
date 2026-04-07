@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#F7F6F3">
+<title>轻记账</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body,#root{height:100%;font-family:'SF Pro Display','PingFang SC',-apple-system,'Helvetica Neue',sans-serif;background:#F7F6F3;color:#1A1A1A;overflow-x:hidden}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+input:focus{border-color:#999!important;outline:none}
+button{-webkit-appearance:none;font-family:inherit}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const {useState,useEffect,useCallback}=React;
+
+const CATEGORIES=[
+  {id:"food",name:"餐饮",icon:"🍜",color:"#E8913A",subs:["外卖","堂食","奶茶咖啡","其他"],pct:.18},
+  {id:"family",name:"家庭",icon:"🏡",color:"#34D399",subs:["日用品","食材","清洁用品","母婴","宠物","其他"],pct:.20},
+  {id:"transport",name:"交通",icon:"🚇",color:"#5B8DEF",subs:["公交地铁","打车","加油","停车","其他"],pct:.08},
+  {id:"shopping",name:"购物",icon:"🛍️",color:"#E05A8D",subs:["衣物","数码","美妆","其他"],pct:.15},
+  {id:"housing",name:"居住",icon:"🏠",color:"#10B981",subs:["房租","水电","物业","维修","其他"],pct:.25},
+  {id:"fun",name:"娱乐",icon:"🎮",color:"#A855F7",subs:["电影","游戏","聚会","运动","其他"],pct:.06},
+  {id:"health",name:"医疗",icon:"💊",color:"#06B6D4",subs:["门诊","药品","体检","保险","其他"],pct:.04},
+  {id:"education",name:"学习",icon:"📚",color:"#8B5CF6",subs:["课程","书籍","考试","其他"],pct:.02},
+  {id:"other",name:"其他",icon:"📎",color:"#6B7280",subs:["人情","礼物","其他"],pct:.02},
+];
+const PAYMENTS=[
+  {id:"wechat",name:"微信",icon:"💚"},
+  {id:"alipay",name:"支付宝",icon:"🔵"},
+  {id:"credit",name:"信用卡",icon:"💳"},
+  {id:"debit",name:"储蓄卡",icon:"🏦"},
+  {id:"cash",name:"现金",icon:"💵"},
+];
+const SK="budget-app-v3";
+const initD=()=>({entries:[],categoryBudgets:{},monthlyBudget:0,savingsPool:0,monthlySavingsGoal:0,savingsLog:[],projects:[],setupDone:false});
+const fmt=n=>Math.abs(n).toLocaleString("zh-CN",{maximumFractionDigits:0});
+const nw=()=>new Date();
+const moOf=d=>{const x=new Date(d);return`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}`};
+const tM=()=>moOf(nw());
+const getMe=ents=>ents.filter(e=>moOf(e.date)===tM()&&!e.projectId);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+// localStorage wrapper
+const store={
+  get(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch{return null}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+};
+
+function App(){
+  const[data,setData]=useState(null);
+  const[view,setView]=useState("home");
+  const[arg,setArg]=useState(null);
+  const[loading,setLoading]=useState(true);
+  useEffect(()=>{const d=store.get(SK);setData(d||initD());setLoading(false)},[]);
+  const save=useCallback(d=>{setData(d);store.set(SK,d)},[]);
+  const go=(v,a)=>{setView(v);setArg(a||null);window.scrollTo(0,0)};
+  if(loading)return<W><p style={{textAlign:"center",color:"#999",paddingTop:100}}>加载中...</p></W>;
+  if(!data)return null;
+  if(!data.setupDone)return<Setup onDone={d=>save({...initD(),...d,setupDone:true})}/>;
+  const V={home:<Home data={data} save={save} go={go}/>,add:<AddEntry data={data} save={save} goBack={()=>go("home")} projectId={arg}/>,history:<History data={data} save={save} goBack={()=>go("home")}/>,settings:<Settings data={data} save={save} goBack={()=>go("home")}/>,savings:<Savings data={data} save={save} go={go}/>,project:<ProjDetail data={data} save={save} go={go} pid={arg}/>,projects:<ProjList data={data} save={save} go={go}/>,payment:<PayBreak data={data} goBack={()=>go("home")}/>};
+  return<W>{V[view]||V.home}<BottomTabs current={view} go={go}/></W>;
+}
+function W({children}){return<div style={S.app}><div style={S.ctn}>{children}</div></div>}
+function BottomTabs({current,go}){
+  const tabs=[{id:"home",icon:"📊",label:"首页"},{id:"add",icon:"✏️",label:"记账"},{id:"savings",icon:"🎯",label:"储蓄"}];
+  if(["settings","project","projects","payment","history"].includes(current))return null;
+  return<div style={S.btabs}>{tabs.map(t=><button key={t.id} onClick={()=>go(t.id)} style={{...S.btab,color:current===t.id?"#1A1A1A":"#999"}}><span style={{fontSize:20}}>{t.icon}</span><span style={{fontSize:11,fontWeight:current===t.id?700:500}}>{t.label}</span></button>)}</div>;
+}
+
+function Setup({onDone}){
+  const[step,setStep]=useState(0);
+  const[budget,setBudget]=useState("");
+  const[sg,setSg]=useState("");
+  const[cb,setCb]=useState({});
+  const goStep1=()=>{if(+budget<=0)return;const rec={};CATEGORIES.forEach(c=>{rec[c.id]=Math.round(+budget*c.pct)});setCb(rec);setStep(1)};
+  if(step===0)return<W><div style={S.sw}><div style={{fontSize:48,marginBottom:8}}>💰</div><h1 style={S.st}>轻记账</h1><p style={S.ss}>三步设置，随时可改</p><label style={S.label}>每月总预算</label><input style={S.input} type="number" inputMode="numeric" placeholder="例如 8000" value={budget} onChange={e=>setBudget(e.target.value)}/><label style={{...S.label,marginTop:16}}>每月储蓄目标</label><input style={S.input} type="number" inputMode="numeric" placeholder="例如 2000（可选）" value={sg} onChange={e=>setSg(e.target.value)}/><Btn primary full mt={24} onClick={goStep1}>下一步 →</Btn></div></W>;
+  const total=Object.values(cb).reduce((s,v)=>s+(+v||0),0);
+  const diff=+budget-total;
+  return<W><div style={S.sw}><h2 style={{...S.st,fontSize:20}}>分类预算</h2><p style={S.ss}>已根据总预算 ¥{fmt(+budget)} 智能推荐，可自由调整</p>{CATEGORIES.map(c=>{const val=cb[c.id]||"";const p=+budget>0&&+val>0?Math.round(+val/+budget*100):0;return<div key={c.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}><span style={{width:60,fontSize:13}}>{c.icon} {c.name}</span><input style={{...S.input,flex:1}} type="number" inputMode="numeric" placeholder="不限" value={val} onChange={e=>setCb({...cb,[c.id]:e.target.value})}/><span style={{width:40,fontSize:12,color:"#999",textAlign:"right"}}>{p}%</span></div>})}<div style={{padding:"10px 0",fontSize:13,color:diff>=0?"#10B981":"#EF4444",fontWeight:600,textAlign:"center"}}>已分配 ¥{fmt(total)} / ¥{fmt(+budget)}{diff>0?` · 剩余 ¥${fmt(diff)} 未分配`:diff<0?` · 超出 ¥${fmt(-diff)}`:" · 刚好分配完 ✓"}</div><div style={{display:"flex",gap:8,marginTop:12}}><Btn full onClick={()=>setStep(0)}>← 上一步</Btn><Btn primary full onClick={()=>{const r={};Object.entries(cb).forEach(([k,v])=>{if(+v>0)r[k]=+v});onDone({monthlyBudget:+budget,monthlySavingsGoal:+sg||0,categoryBudgets:r})}}>开始使用 ✓</Btn></div></div></W>;
+}
+
+function Home({data,save,go}){
+  const me=getMe(data.entries);
+  const spent=me.reduce((s,e)=>s+e.amount,0);
+  const rem=data.monthlyBudget-spent;
+  const pct=data.monthlyBudget>0?Math.min(spent/data.monthlyBudget,1):0;
+  const dim=new Date(nw().getFullYear(),nw().getMonth()+1,0).getDate();
+  const tp=nw().getDate()/dim;
+  const ok=pct<=tp+.05;
+  const byCat={};
+  CATEGORIES.forEach(c=>(byCat[c.id]={total:0,subs:{}}));
+  me.forEach(e=>{if(!byCat[e.category])return;byCat[e.category].total+=e.amount;const sub=e.subcategory||"其他";byCat[e.category].subs[sub]=(byCat[e.category].subs[sub]||0)+e.amount});
+  const ap=data.projects.filter(p=>!p.closed);
+  return<div style={S.page}>
+    <div style={S.hh}><span style={S.ml}>{nw().getMonth()+1}月</span><div style={{display:"flex",gap:8}}><button style={S.ib} onClick={()=>go("history")}>📋</button><button style={S.ib} onClick={()=>go("settings")}>⚙️</button></div></div>
+    <div style={S.card}><p style={S.cl}>本月还可以花</p><p style={{...S.bn,color:rem>=0?"#10B981":"#EF4444"}}>¥{fmt(rem)}{rem<0&&<span style={S.ot}>超支</span>}</p><div style={S.trk}><div style={{...S.fl,width:`${pct*100}%`,background:ok?"#10B981":pct>.9?"#EF4444":"#F59E0B"}}/><div style={{...S.tmk,left:`${tp*100}%`}}/></div><p style={S.ht}>{ok?"👍 消费节奏健康":pct>.9?"⚠️ 预算快用完了":"📊 消费略快，留意一下"}</p></div>
+    <div style={S.card}><p style={S.ct}>分类消费</p>{CATEGORIES.filter(c=>byCat[c.id].total>0).map(c=><CatRow key={c.id} cat={c} amt={byCat[c.id].total} budget={data.categoryBudgets[c.id]} subs={byCat[c.id].subs}/>)}{CATEGORIES.every(c=>byCat[c.id].total===0)&&<p style={S.emp}>本月还没有记录</p>}</div>
+    <div style={{...S.card,cursor:"pointer"}} onClick={()=>go("payment")}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:14,fontWeight:600}}>💳 支付方式统计</span><span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>查看 →</span></div></div>
+    <div style={S.card}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{fontSize:14,fontWeight:600}}>📂 专项模块</span><span style={{fontSize:12,color:"#3B82F6",fontWeight:600,cursor:"pointer"}} onClick={()=>go("projects")}>管理 →</span></div>{ap.length===0&&<p style={S.emp}>没有进行中的专项</p>}{ap.slice(0,3).map(p=>{const ps=data.entries.filter(e=>e.projectId===p.id).reduce((s,e)=>s+e.amount,0);return<div key={p.id} style={{...S.pr,cursor:"pointer"}} onClick={()=>go("project",p.id)}><span>{p.icon} {p.name}</span><span style={{fontSize:13,fontWeight:600}}>¥{fmt(ps)}{p.budget>0&&<span style={{color:"#999",fontWeight:400}}> / {fmt(p.budget)}</span>}</span></div>})}</div>
+    <div style={{height:80}}/>
+  </div>;
+}
+
+function CatRow({cat,amt,budget,subs}){
+  const[open,setOpen]=useState(false);
+  const pct=budget?Math.min(amt/budget,1):0;
+  const over=budget&&amt>budget;
+  return<div style={{marginBottom:8}}>
+    <div style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}} onClick={()=>Object.keys(subs).length>1&&setOpen(!open)}>
+      <span style={{fontSize:16,width:24,textAlign:"center"}}>{cat.icon}</span>
+      <span style={{fontSize:13,width:40,color:"#555"}}>{cat.name}</span>
+      <div style={{flex:1,height:6,borderRadius:3,background:"#EEECEA"}}><div style={{height:6,borderRadius:3,background:over?"#EF4444":cat.color,width:`${budget?pct*100:Math.min(amt/3000*100,100)}%`,transition:"width .3s"}}/></div>
+      <span style={{fontSize:13,fontWeight:600,width:85,textAlign:"right",color:over?"#EF4444":"#1A1A1A"}}>{fmt(amt)}{budget?<span style={{color:"#bbb",fontWeight:400}}>/{fmt(budget)}</span>:""}</span>
+      {Object.keys(subs).length>1&&<span style={{fontSize:10,color:"#bbb"}}>{open?"▲":"▼"}</span>}
+    </div>
+    {open&&<div style={{paddingLeft:40,paddingTop:4}}>{Object.entries(subs).sort((a,b)=>b[1]-a[1]).map(([n,a])=><div key={n} style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#888",padding:"2px 0"}}><span>{n}</span><span>¥{fmt(a)}</span></div>)}</div>}
+  </div>;
+}
+
+function AddEntry({data,save,goBack,projectId}){
+  const[amount,setAmount]=useState("");
+  const[cat,setCat]=useState("");
+  const[sub,setSub]=useState("");
+  const[pay,setPay]=useState("");
+  const[note,setNote]=useState("");
+  const sc=CATEGORIES.find(c=>c.id===cat);
+  const submit=()=>{if(!amount||+amount<=0||!cat)return;save({...data,entries:[...data.entries,{id:uid(),amount:+amount,category:cat,subcategory:sub||"其他",payment:pay||"wechat",note,date:new Date().toISOString(),projectId:projectId||null}]});goBack()};
+  return<div style={S.page}><TB t={projectId?"专项记账":"记一笔"} onBack={goBack}/>
+    <div style={{padding:"4px 20px 100px"}}>
+      <label style={S.label}>金额</label><input style={{...S.input,fontSize:28,textAlign:"center",fontWeight:700}} type="number" inputMode="decimal" placeholder="0" value={amount} onChange={e=>setAmount(e.target.value)} autoFocus/>
+      <label style={{...S.label,marginTop:18}}>分类</label><div style={S.cg}>{CATEGORIES.map(c=><Chip key={c.id} on={cat===c.id} color={c.color} onClick={()=>{setCat(c.id);setSub("")}}>{c.icon} {c.name}</Chip>)}</div>
+      {sc&&<><label style={{...S.label,marginTop:14}}>细分 <span style={{fontWeight:400,color:"#aaa"}}>（可选）</span></label><div style={S.cg}>{sc.subs.map(s=><Chip key={s} on={sub===s} color={sc.color} sm onClick={()=>setSub(sub===s?"":s)}>{s}</Chip>)}</div></>}
+      <label style={{...S.label,marginTop:18}}>支付方式</label><div style={S.cg}>{PAYMENTS.map(p=><Chip key={p.id} on={pay===p.id} color="#555" onClick={()=>setPay(p.id)}>{p.icon} {p.name}</Chip>)}</div>
+      <label style={{...S.label,marginTop:18}}>备注 <span style={{fontWeight:400,color:"#aaa"}}>（可选）</span></label><input style={S.input} placeholder="随便写" value={note} onChange={e=>setNote(e.target.value)}/>
+      <Btn primary full mt={24} onClick={submit}>✓ 记下来</Btn>
+    </div></div>;
+}
+
+function History({data,save,goBack}){
+  const sorted=[...data.entries].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const grouped={};sorted.forEach(e=>{const k=moOf(e.date);if(!grouped[k])grouped[k]=[];grouped[k].push(e)});
+  const del=id=>{if(confirm("删除这条记录？"))save({...data,entries:data.entries.filter(e=>e.id!==id)})};
+  return<div style={S.page}><TB t="历史记录" onBack={goBack}/><div style={{padding:"0 16px 100px"}}>
+    {Object.keys(grouped).length===0&&<p style={S.emp}>还没有记录</p>}
+    {Object.entries(grouped).map(([m,es])=><div key={m}><p style={S.mh}>{m} · ¥{fmt(es.reduce((s,e)=>s+e.amount,0))}</p>
+      {es.map(e=>{const c=CATEGORIES.find(x=>x.id===e.category)||CATEGORIES[8];const p=PAYMENTS.find(x=>x.id===e.payment);const pj=e.projectId?data.projects.find(x=>x.id===e.projectId):null;
+        return<div key={e.id} style={S.hr}><span style={{fontSize:20}}>{c.icon}</span><div style={{flex:1}}><div style={{fontSize:14,fontWeight:600}}>{c.name}{e.subcategory&&e.subcategory!=="其他"?` · ${e.subcategory}`:""}</div><div style={{fontSize:11,color:"#999"}}>{p?p.icon+" ":""}{e.note||new Date(e.date).toLocaleDateString("zh-CN",{month:"numeric",day:"numeric"})}{pj&&<span style={{marginLeft:6,background:"#EEF2FF",color:"#6366F1",padding:"1px 6px",borderRadius:4,fontSize:10}}>{pj.icon} {pj.name}</span>}</div></div><span style={{fontSize:15,fontWeight:700,marginRight:6}}>¥{fmt(e.amount)}</span><button style={{fontSize:14,background:"none",border:"none",color:"#ccc",cursor:"pointer"}} onClick={()=>del(e.id)}>✕</button></div>})}</div>)}
+  </div></div>;
+}
+
+function Savings({data,save,go}){
+  const[amt,setAmt]=useState("");
+  const[note,setNote]=useState("");
+  const md=data.savingsLog.filter(l=>moOf(l.date)===tM()&&l.type==="deposit").reduce((s,l)=>s+l.amount,0);
+  const mw=data.savingsLog.filter(l=>moOf(l.date)===tM()&&l.type==="withdraw").reduce((s,l)=>s+l.amount,0);
+  const act=type=>{if(!amt||+amt<=0)return;if(type==="withdraw"&&+amt>data.savingsPool)return alert("余额不足");save({...data,savingsPool:type==="deposit"?data.savingsPool+ +amt:data.savingsPool- +amt,savingsLog:[...data.savingsLog,{id:uid(),type,amount:+amt,date:new Date().toISOString(),note}]});setAmt("");setNote("")};
+  const recent=[...data.savingsLog].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,30);
+  return<div style={S.page}>
+    <div style={S.hh}><span style={S.ml}>🎯 储蓄</span><span/></div>
+    <div style={{...S.card,textAlign:"center",background:"linear-gradient(135deg,#1A1A1A 0%,#333 100%)",color:"#fff"}}><p style={{fontSize:13,color:"rgba(255,255,255,.6)",margin:0}}>储蓄池余额</p><p style={{fontSize:36,fontWeight:800,margin:"6px 0 0",letterSpacing:-1}}>¥{fmt(data.savingsPool)}</p></div>
+    <div style={{display:"flex",gap:10,margin:"0 16px"}}><div style={{...S.card,flex:1,margin:"10px 0",textAlign:"center"}}><p style={{fontSize:11,color:"#888",margin:0}}>本月存入</p><p style={{fontSize:20,fontWeight:700,margin:"4px 0 0",color:"#10B981"}}>+{fmt(md)}</p></div><div style={{...S.card,flex:1,margin:"10px 0",textAlign:"center"}}><p style={{fontSize:11,color:"#888",margin:0}}>本月取出</p><p style={{fontSize:20,fontWeight:700,margin:"4px 0 0",color:"#EF4444"}}>-{fmt(mw)}</p></div></div>
+    {data.monthlySavingsGoal>0&&<div style={S.card}><div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}><span style={{color:"#888"}}>本月目标</span><span style={{fontWeight:600}}>¥{fmt(md)} / {fmt(data.monthlySavingsGoal)}</span></div><div style={{height:10,borderRadius:5,background:"#EEECEA"}}><div style={{height:10,borderRadius:5,background:md>=data.monthlySavingsGoal?"#10B981":"#3B82F6",width:`${Math.min(md/data.monthlySavingsGoal*100,100)}%`,transition:"width .3s"}}/></div>{md>=data.monthlySavingsGoal&&<p style={{fontSize:13,color:"#10B981",margin:"8px 0 0",textAlign:"center",fontWeight:600}}>🎉 本月目标已达成！</p>}</div>}
+    <div style={S.card}><input style={{...S.input,marginBottom:8}} type="number" inputMode="decimal" placeholder="金额" value={amt} onChange={e=>setAmt(e.target.value)}/><input style={{...S.input,marginBottom:8}} placeholder="备注（可选）" value={note} onChange={e=>setNote(e.target.value)}/><div style={{display:"flex",gap:8}}><Btn primary full onClick={()=>act("deposit")}>+ 存入</Btn><Btn full onClick={()=>act("withdraw")} sx={{color:"#EF4444",border:"1px solid #EF4444"}}>- 取出</Btn></div></div>
+    {recent.length>0&&<div style={S.card}><p style={{fontSize:14,fontWeight:600,margin:"0 0 10px"}}>操作记录</p>{recent.map(l=><div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #F2F0EC",fontSize:13}}><div><span style={{color:"#555"}}>{new Date(l.date).toLocaleDateString("zh-CN",{month:"numeric",day:"numeric"})}</span>{l.note&&<span style={{color:"#aaa",marginLeft:6}}>{l.note}</span>}</div><span style={{fontWeight:600,color:l.type==="deposit"?"#10B981":"#EF4444"}}>{l.type==="deposit"?"+":"-"}¥{fmt(l.amount)}</span></div>)}</div>}
+    <div style={{height:80}}/>
+  </div>;
+}
+
+function ProjList({data,save,go}){
+  const[name,setName]=useState("");const[budget,setBudget]=useState("");const[icon,setIcon]=useState("✈️");
+  const icons=["✈️","🏠","🎓","💍","🎉","🏥","📱","🚗"];
+  const add=()=>{if(!name.trim())return;save({...data,projects:[...data.projects,{id:uid(),name:name.trim(),icon,budget:+budget||0,closed:false}]});setName("");setBudget("")};
+  return<div style={S.page}><TB t="专项模块" onBack={()=>go("home")}/><div style={{padding:"0 20px 100px"}}>
+    <div style={{...S.card,margin:"0 0 16px"}}><p style={{fontSize:13,fontWeight:600,margin:"0 0 10px"}}>新建专项</p><div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>{icons.map(i=><button key={i} onClick={()=>setIcon(i)} style={{fontSize:20,padding:"4px 8px",borderRadius:8,border:icon===i?"2px solid #555":"2px solid transparent",background:"none",cursor:"pointer"}}>{i}</button>)}</div><input style={{...S.input,marginBottom:8}} placeholder="名称，如「日本旅行」" value={name} onChange={e=>setName(e.target.value)}/><input style={{...S.input,marginBottom:8}} type="number" inputMode="numeric" placeholder="预算（可选）" value={budget} onChange={e=>setBudget(e.target.value)}/><Btn primary full onClick={add}>创建</Btn></div>
+    {data.projects.map(p=>{const ps=data.entries.filter(e=>e.projectId===p.id).reduce((s,e)=>s+e.amount,0);return<div key={p.id} style={{...S.card,margin:"0 0 10px",opacity:p.closed?.5:1,cursor:"pointer"}} onClick={()=>go("project",p.id)}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:15,fontWeight:600}}>{p.icon} {p.name} {p.closed&&<span style={{fontSize:11,color:"#999"}}>已结束</span>}</span><span style={{fontSize:14,fontWeight:700}}>¥{fmt(ps)}{p.budget>0&&<span style={{color:"#999",fontWeight:400,fontSize:12}}> / {fmt(p.budget)}</span>}</span></div>{p.budget>0&&<div style={{height:4,borderRadius:2,background:"#EEECEA",marginTop:8}}><div style={{height:4,borderRadius:2,background:ps>p.budget?"#EF4444":"#3B82F6",width:`${Math.min(ps/p.budget*100,100)}%`}}/></div>}</div>})}
+  </div></div>;
+}
+
+function ProjDetail({data,save,go,pid}){
+  const proj=data.projects.find(p=>p.id===pid);
+  if(!proj)return<div style={S.page}><TB t="未找到" onBack={()=>go("projects")}/></div>;
+  const entries=data.entries.filter(e=>e.projectId===pid).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const spent=entries.reduce((s,e)=>s+e.amount,0);
+  return<div style={S.page}><TB t={`${proj.icon} ${proj.name}`} onBack={()=>go("projects")}/><div style={{padding:"0 20px 100px"}}>
+    <div style={{...S.card,margin:"0 0 12px",textAlign:"center"}}><p style={{fontSize:12,color:"#888",margin:0}}>已花费</p><p style={{fontSize:28,fontWeight:800,margin:"4px 0"}}>¥{fmt(spent)}{proj.budget>0&&<span style={{fontSize:14,color:"#999",fontWeight:400}}> / {fmt(proj.budget)}</span>}</p>{proj.budget>0&&<div style={{height:6,borderRadius:3,background:"#EEECEA"}}><div style={{height:6,borderRadius:3,background:spent>proj.budget?"#EF4444":"#10B981",width:`${Math.min(spent/proj.budget*100,100)}%`}}/></div>}</div>
+    <div style={{display:"flex",gap:8,marginBottom:16}}><Btn primary full onClick={()=>go("add",pid)}>+ 记一笔</Btn>{!proj.closed&&<Btn full onClick={()=>save({...data,projects:data.projects.map(p=>p.id===pid?{...p,closed:true}:p)})} sx={{color:"#F59E0B",border:"1px solid #F59E0B"}}>结束专项</Btn>}</div>
+    {entries.map(e=>{const c=CATEGORIES.find(x=>x.id===e.category)||CATEGORIES[8];return<div key={e.id} style={S.hr}><span style={{fontSize:18}}>{c.icon}</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{c.name}{e.subcategory&&e.subcategory!=="其他"?` · ${e.subcategory}`:""}</div><div style={{fontSize:11,color:"#999"}}>{e.note||new Date(e.date).toLocaleDateString("zh-CN",{month:"numeric",day:"numeric"})}</div></div><span style={{fontSize:14,fontWeight:700}}>¥{fmt(e.amount)}</span></div>})}
+    {entries.length===0&&<p style={S.emp}>还没有记录</p>}
+  </div></div>;
+}
+
+function PayBreak({data,goBack}){
+  const me=getMe(data.entries);const byP={};PAYMENTS.forEach(p=>(byP[p.id]=0));me.forEach(e=>(byP[e.payment]=(byP[e.payment]||0)+e.amount));const total=me.reduce((s,e)=>s+e.amount,0);
+  return<div style={S.page}><TB t="支付方式统计" onBack={goBack}/><div style={{padding:"0 20px"}}>
+    <p style={{fontSize:12,color:"#888",margin:"0 0 16px"}}>本月各渠道消费</p>
+    {PAYMENTS.map(p=>{const a=byP[p.id]||0;if(!a)return null;return<div key={p.id} style={{marginBottom:14}}><div style={{display:"flex",justifyContent:"space-between",fontSize:14,marginBottom:4}}><span>{p.icon} {p.name}</span><span style={{fontWeight:700}}>¥{fmt(a)}<span style={{fontWeight:400,color:"#999",fontSize:12}}> ({total>0?Math.round(a/total*100):0}%)</span></span></div><div style={{height:6,borderRadius:3,background:"#EEECEA"}}><div style={{height:6,borderRadius:3,background:"#5B8DEF",width:`${total>0?a/total*100:0}%`}}/></div></div>})}
+    {total===0&&<p style={S.emp}>本月还没有记录</p>}
+  </div></div>;
+}
+
+function Settings({data,save,goBack}){
+  const[b,setB]=useState(String(data.monthlyBudget));
+  const[sg,setSg]=useState(String(data.monthlySavingsGoal));
+  const[cb,setCb]=useState({...data.categoryBudgets});
+  const autoFill=()=>{if(+b<=0)return;const rec={};CATEGORIES.forEach(c=>{rec[c.id]=Math.round(+b*c.pct)});setCb(rec)};
+  const total=Object.values(cb).reduce((s,v)=>s+(+v||0),0);
+  const diff=+b-total;
+  return<div style={S.page}><TB t="设置" onBack={goBack}/><div style={{padding:"0 20px 100px"}}>
+    <label style={S.label}>每月总预算</label><input style={S.input} type="number" inputMode="numeric" value={b} onChange={e=>setB(e.target.value)}/>
+    <label style={{...S.label,marginTop:16}}>每月储蓄目标</label><input style={S.input} type="number" inputMode="numeric" value={sg} onChange={e=>setSg(e.target.value)}/>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:24}}><p style={{fontSize:14,fontWeight:700,margin:0}}>分类预算</p><button style={{fontSize:12,color:"#3B82F6",background:"none",border:"none",cursor:"pointer",fontWeight:600}} onClick={autoFill}>智能推荐</button></div>
+    {CATEGORIES.map(c=>{const val=cb[c.id]||"";const p=+b>0&&+val>0?Math.round(+val/+b*100):0;return<div key={c.id} style={{display:"flex",alignItems:"center",gap:6,marginTop:8}}><span style={{width:60,fontSize:13}}>{c.icon} {c.name}</span><input style={{...S.input,flex:1}} type="number" inputMode="numeric" placeholder="不限" value={val} onChange={e=>setCb({...cb,[c.id]:e.target.value})}/><span style={{width:40,fontSize:12,color:"#999",textAlign:"right"}}>{p}%</span></div>})}
+    <div style={{padding:"10px 0",fontSize:13,color:diff>=0?"#10B981":"#EF4444",fontWeight:600,textAlign:"center"}}>已分配 ¥{fmt(total)} / ¥{fmt(+b||0)}{diff>0?` · 剩余 ¥${fmt(diff)}`:diff<0?` · 超出 ¥${fmt(-diff)}`:" · ✓"}</div>
+    <Btn primary full mt={12} onClick={()=>{const r={};Object.entries(cb).forEach(([k,v])=>{if(+v>0)r[k]=+v});save({...data,monthlyBudget:+b||data.monthlyBudget,monthlySavingsGoal:+sg||0,categoryBudgets:r});goBack()}}>保存</Btn>
+    <Btn full mt={32} onClick={()=>{if(confirm("确定清空所有数据？"))save(initD());goBack()}} sx={{color:"#EF4444",border:"1px solid #EF4444"}}>清空所有数据</Btn>
+
+    <div style={{marginTop:40,padding:"16px",background:"#fff",borderRadius:12,border:"1px solid #EEECEA"}}>
+      <p style={{fontSize:13,fontWeight:600,margin:"0 0 8px"}}>📦 导出数据</p>
+      <p style={{fontSize:12,color:"#888",margin:"0 0 10px"}}>导出 JSON 备份文件</p>
+      <Btn full onClick={()=>{const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`budget-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url)}}>导出备份</Btn>
+      <p style={{fontSize:13,fontWeight:600,margin:"16px 0 8px"}}>📥 导入数据</p>
+      <input type="file" accept=".json" style={{fontSize:13}} onChange={e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.entries&&d.setupDone!==undefined){if(confirm("导入将覆盖当前所有数据，确定？")){save(d);goBack()}}else{alert("文件格式不对")}}catch{alert("解析失败")}};r.readAsText(f)}}/>
+    </div>
+  </div></div>;
+}
+
+function TB({t,onBack}){return<div style={S.tb}><button style={S.bb} onClick={onBack}>← 返回</button><span style={{fontSize:16,fontWeight:700}}>{t}</span><span style={{width:56}}/></div>}
+function Btn({children,primary,full,mt,onClick,sx}){return<button onClick={onClick} style={{...S.btn,...(primary?S.bp:{}),...(full?{width:"100%"}:{}),...(mt?{marginTop:mt}:{}),...sx}}>{children}</button>}
+function Chip({children,on,color,sm,onClick}){return<button onClick={onClick} style={{padding:sm?"5px 10px":"8px 14px",fontSize:sm?12:14,borderRadius:10,border:on?`1.5px solid ${color}`:"1.5px solid #DDDAD5",background:on?color:"#fff",color:on?"#fff":"#333",cursor:"pointer",transition:"all .15s"}}>{children}</button>}
+
+const S={
+  app:{fontFamily:"'SF Pro Display','PingFang SC',-apple-system,sans-serif",minHeight:"100vh",background:"#F7F6F3",color:"#1A1A1A"},
+  ctn:{maxWidth:430,margin:"0 auto"},page:{paddingBottom:20},
+  sw:{padding:"50px 28px 40px",textAlign:"center"},st:{fontSize:26,fontWeight:700,margin:"0 0 6px"},ss:{color:"#888",fontSize:14,marginBottom:28},
+  label:{display:"block",fontSize:13,fontWeight:600,color:"#666",marginBottom:6,textAlign:"left"},
+  input:{display:"block",width:"100%",padding:"11px 14px",fontSize:15,border:"1.5px solid #E0DDD8",borderRadius:12,background:"#fff",outline:"none",boxSizing:"border-box"},
+  btn:{padding:"13px 0",fontSize:15,fontWeight:600,borderRadius:12,border:"1.5px solid #DDDAD5",cursor:"pointer",background:"#fff",color:"#333"},
+  bp:{background:"#1A1A1A",color:"#fff",border:"none"},
+  card:{margin:"10px 16px",padding:"16px 18px",background:"#fff",borderRadius:16,boxShadow:"0 1px 3px rgba(0,0,0,.05)"},
+  cl:{margin:0,fontSize:13,color:"#888"},ct:{margin:"0 0 12px",fontSize:14,fontWeight:700},
+  bn:{fontSize:34,fontWeight:800,margin:"4px 0 14px",letterSpacing:-1},
+  ot:{fontSize:12,fontWeight:600,marginLeft:8,padding:"2px 8px",borderRadius:6,background:"#FEE2E2",color:"#EF4444"},
+  trk:{position:"relative",height:8,borderRadius:4,background:"#EEECEA"},
+  fl:{position:"absolute",top:0,left:0,height:8,borderRadius:4,transition:"width .4s"},
+  tmk:{position:"absolute",top:-3,width:2,height:14,background:"#1A1A1A",borderRadius:1,opacity:.3},
+  ht:{margin:"10px 0 0",fontSize:13,color:"#888"},
+  hh:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 20px 6px"},
+  ml:{fontSize:22,fontWeight:700},ib:{fontSize:20,background:"none",border:"none",cursor:"pointer",padding:4},
+  cg:{display:"flex",flexWrap:"wrap",gap:8},
+  btabs:{position:"fixed",bottom:0,left:0,right:0,display:"flex",justifyContent:"center",gap:0,padding:"6px 0 22px",background:"#fff",borderTop:"1px solid #EEECEA",zIndex:50},
+  btab:{display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"4px 28px",minWidth:64},
+  tb:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 16px 10px"},
+  bb:{fontSize:15,fontWeight:500,background:"none",border:"none",cursor:"pointer",color:"#1A1A1A"},
+  pr:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #F2F0EC",fontSize:14},
+  mh:{fontSize:13,fontWeight:700,color:"#888",margin:"20px 0 8px",borderBottom:"1px solid #EBE9E5",paddingBottom:6},
+  hr:{display:"flex",alignItems:"center",padding:"10px 0",gap:10,borderBottom:"1px solid #F2F0EC"},
+  emp:{textAlign:"center",color:"#bbb",fontSize:14,padding:"20px 0"},
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
