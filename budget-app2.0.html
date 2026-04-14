@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<title>轻记账</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+<style>
+:root{
+  --font-zh: 'PingFang SC','SF Pro SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+  --font-num: 'SF Pro Display','DIN Alternate',-apple-system,'Helvetica Neue',sans-serif;
+  --font-sys: -apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','PingFang SC','Helvetica Neue',sans-serif;
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --text1: #1d1d1f;
+  --text2: rgba(0,0,0,.56);
+  --text3: rgba(0,0,0,.32);
+  --sep: rgba(0,0,0,.08);
+  --blue: #0071e3;
+  --link: #0066cc;
+  --green: #34C759;
+  --red: #FF3B30;
+  --orange: #FF9500;
+  --yellow: #FFCC00;
+  --purple: #AF52DE;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{height:100%;-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font-sys);
+  background:var(--bg);color:var(--text1);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  min-height:100%;overflow-x:hidden;
+  padding-top:env(safe-area-inset-top);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+#root{min-height:100vh}
+/* Numbers always use SF Pro Display */
+.num{font-family:var(--font-num);font-feature-settings:'tnum'}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
+input[type=number]{-moz-appearance:textfield;font-family:var(--font-num)}
+input:focus{outline:none}
+button{-webkit-appearance:none;font-family:var(--font-sys);cursor:pointer}
+/* iOS date input fix */
+input[type=date]{font-family:var(--font-sys);color:var(--text1);min-height:44px}
+::selection{background:var(--blue);color:#fff}
+/* Track bar base */
+.trk{height:4px;border-radius:2px;background:var(--sep);overflow:hidden}
+.trk>div{height:100%;border-radius:2px;transition:width .4s ease}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useEffect,useCallback}=React;
+
+/* ═══ CONFIG ═══ */
+const CATS=[
+  {id:"work_meal",name:"工作餐",icon:"🏢",color:"#FF9500",avg:"wd",pct:.14,subs:["早午餐+饮品","下午茶零食","咖啡","其他"]},
+  {id:"eat_out",name:"外出就餐",icon:"🍽️",color:"#FF6B35",avg:"all",pct:.10,subs:["餐厅","火锅烧烤","聚餐","其他"]},
+  {id:"home_food",name:"在家吃饭",icon:"🍜",color:"#34C759",avg:"all",pct:.08,subs:["外卖到家","买菜食材","零食","其他"]},
+  {id:"family",name:"家庭用品",icon:"🏡",color:"#30D158",avg:"all",pct:.08,subs:["日用品","清洁用品","生活物品","收纳家居","其他"]},
+  {id:"transport",name:"交通",icon:"🚇",color:"#007AFF",avg:"wd",pct:.07,subs:["公交地铁","打车","加油停车","其他"]},
+  {id:"shopping",name:"购物",icon:"🛍️",color:"#FF2D55",avg:"all",pct:.12,subs:["衣物鞋包","数码3C","美妆护肤","其他"]},
+  {id:"housing",name:"居住",icon:"🔑",color:"#5AC8FA",avg:"all",pct:.22,subs:["房租房贷","水电煤","物业","维修","其他"]},
+  {id:"fun",name:"娱乐",icon:"🎮",color:"#AF52DE",avg:"all",pct:.06,subs:["电影演出","游戏","健身","其他"]},
+  {id:"health",name:"医疗",icon:"💊",color:"#5AC8FA",avg:"all",pct:.04,subs:["门诊","药品","体检保险","其他"]},
+  {id:"social",name:"人情",icon:"🎁",color:"#FF2D55",avg:"all",pct:.03,subs:["礼物红包","份子钱","请客","其他"]},
+  {id:"other",name:"其他",icon:"📎",color:"#8E8E93",avg:"all",pct:.03,subs:["宠物","订阅","其他"]},
+];
+const PAYS=[{id:"wechat",name:"微信",icon:"💚"},{id:"alipay",name:"支付宝",icon:"🔵"},{id:"credit",name:"信用卡",icon:"💳"},{id:"debit",name:"储蓄卡",icon:"🏦"},{id:"cash",name:"现金",icon:"💵"}];
+
+const SK="budget-v6";
+const D=()=>({entries:[],cb:{},mb:0,sp:0,sg:0,sl:[],pj:[],ok:false});
+const fm=n=>{const s=Math.abs(n);return s>=10000?(s/10000).toFixed(s%10000===0?0:1)+"w":s.toLocaleString("zh-CN",{maximumFractionDigits:0})};
+const fmF=n=>Math.abs(n).toLocaleString("zh-CN",{maximumFractionDigits:0});
+const nw=()=>new Date();
+const mo=d=>{const x=new Date(d);return`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}`};
+const tm=()=>mo(nw());
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const td=()=>{const d=nw();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`};
+const fD=s=>{if(!s)return"";const p=s.split("-");return`${+p[1]}/${+p[2]}`};
+const fDF=s=>{if(!s)return"";const p=s.split("-");return`${+p[1]}月${+p[2]}日`};
+function cWD(f,t){let c=0;const d=new Date(f),e=new Date(t);while(d<=e){const w=d.getDay();if(w>0&&w<6)c++;d.setDate(d.getDate()+1)}return c||1}
+function cD(f,t){return Math.max(1,Math.round((new Date(t)-new Date(f))/864e5)+1)}
+function wdE(){const y=nw().getFullYear(),m=nw().getMonth();return cWD(`${y}-${String(m+1).padStart(2,"0")}-01`,td())}
+function dE(){return nw().getDate()}
+function dM(){return new Date(nw().getFullYear(),nw().getMonth()+1,0).getDate()}
+
+const gMe=ents=>ents.filter(e=>mo(e.df)===tm()&&!e.pid&&!e.fromSav);
+const gMeAll=ents=>ents.filter(e=>mo(e.df)===tm()&&!e.pid);
+function lastRec(ents){const me=gMeAll(ents);if(!me.length)return null;let mx="";me.forEach(e=>{const d=e.dt||e.df;if(d>mx)mx=d});return mx}
+
+const LS={g(k){try{return JSON.parse(localStorage.getItem(k))}catch{return null}},s(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+
+/* ═══ APP ═══ */
+function App(){
+  const[data,sd]=useState(null),[vw,sv]=useState("home"),[ag,sa]=useState(null),[ld,sl]=useState(true);
+  useEffect(()=>{sd(LS.g(SK)||D());sl(false)},[]);
+  const save=useCallback(d=>{sd(d);LS.s(SK,d)},[]);
+  const go=(v,a)=>{sv(v);sa(a||null);window.scrollTo(0,0)};
+  if(ld)return<div style={{display:"flex",justifyContent:"center",alignItems:"center",height:"100vh"}}><p style={T.body2}>加载中…</p></div>;
+  if(!data)return null;
+  if(!data.ok)return<Setup onDone={d=>save({...D(),...d,ok:true})}/>;
+  const P={home:<Home d={data} s={save} go={go}/>,add:<Add d={data} s={save} gb={()=>go("home")} pid={ag}/>,recon:<Recon d={data} s={save} go={go}/>,hist:<Hist d={data} s={save} go={go}/>,sett:<Sett d={data} s={save} gb={()=>go("home")}/>,sav:<Sav d={data} s={save} go={go}/>,pjd:<PjD d={data} s={save} go={go} pid={ag}/>,pjl:<PjL d={data} s={save} go={go}/>,pay:<PayB d={data} gb={()=>go("home")}/>,edit:<Edit d={data} s={save} gb={()=>go("hist")} eid={ag}/>};
+  return<>{P[vw]||P.home}{["home","add","sav"].includes(vw)&&<TabBar c={vw} go={go}/>}</>;
+}
+
+function TabBar({c,go}){
+  return<div style={S.tabs}>
+    {[["home","house.fill","首页"],["add","plus.circle.fill","记账"],["sav","banknote.fill","储蓄"]].map(([id,,lb],i)=>
+      <button key={id} onClick={()=>go(id)} style={{...S.tab,color:c===id?"var(--blue)":"#8E8E93"}}>
+        <span style={{fontSize:22}}>{["📊","✏️","🎯"][i]}</span>
+        <span style={{fontSize:10,fontWeight:500,fontFamily:"var(--font-zh)"}}>{lb}</span>
+      </button>
+    )}
+  </div>;
+}
+
+/* ═══ SETUP ═══ */
+function Setup({onDone}){
+  const[st,ss]=useState(0),[b,sb]=useState(""),[sg,ssg]=useState(""),[cb,scb]=useState({});
+  if(st===0)return<div style={S.setupBg}><div style={S.setupIn}>
+    <p style={{fontSize:56,marginBottom:0}}>💰</p>
+    <h1 style={{...T.largeTitle,marginTop:8}}>轻记账</h1>
+    <p style={{...T.body2,marginTop:6}}>专为「攒几天再记」设计</p>
+    <div style={{textAlign:"left",width:"100%",marginTop:36}}>
+      <label style={T.caption1}>每月总预算</label>
+      <input style={S.inp} type="number" inputMode="numeric" placeholder="例如 8000" value={b} onChange={e=>sb(e.target.value)}/>
+      <label style={{...T.caption1,marginTop:20}}>每月储蓄目标</label>
+      <input style={S.inp} type="number" inputMode="numeric" placeholder="可选" value={sg} onChange={e=>ssg(e.target.value)}/>
+    </div>
+    <button style={{...S.btnP,marginTop:28}} onClick={()=>{if(+b<=0)return;const r={};CATS.forEach(c=>{r[c.id]=Math.round(+b*c.pct)});scb(r);ss(1)}}>继续</button>
+  </div></div>;
+
+  const tot=Object.values(cb).reduce((a,v)=>a+(+v||0),0);const df=+b-tot;
+  return<div style={{background:"var(--bg)",minHeight:"100vh",padding:"56px 20px 40px"}}>
+    <h2 style={{...T.title1,textAlign:"center"}}>分类预算</h2>
+    <p style={{...T.body2,textAlign:"center",marginTop:4,marginBottom:28}}>根据 ¥{fmF(+b)} 智能推荐</p>
+    {CATS.map(c=>{const v=cb[c.id]||"";const p=+b>0&&+v>0?Math.round(+v/+b*100):0;
+      return<div key={c.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        <span style={{width:72,fontSize:14,fontFamily:"var(--font-zh)"}}>{c.icon} {c.name}</span>
+        <input style={{...S.inp,flex:1}} type="number" inputMode="numeric" placeholder="不限" value={v} onChange={e=>scb({...cb,[c.id]:e.target.value})}/>
+        <span className="num" style={{width:36,fontSize:13,color:"var(--text3)",textAlign:"right"}}>{p}%</span>
+      </div>})}
+    <p className="num" style={{textAlign:"center",fontSize:14,fontWeight:600,color:df>=0?"var(--green)":"var(--red)",margin:"14px 0"}}>
+      已分配 ¥{fmF(tot)} / ¥{fmF(+b)}{df>0?` · 余 ¥${fmF(df)}`:df<0?` · 超 ¥${fmF(-df)}`:" ✓"}
+    </p>
+    <div style={{display:"flex",gap:10}}>
+      <button style={S.btnS} onClick={()=>ss(0)}>上一步</button>
+      <button style={S.btnP} onClick={()=>{const r={};Object.entries(cb).forEach(([k,v])=>{if(+v>0)r[k]=+v});onDone({mb:+b,sg:+sg||0,cb:r})}}>开始使用</button>
+    </div>
+  </div>;
+}
+
+/* ═══ HOME ═══ */
+function Home({d,s,go}){
+  const me=gMe(d.entries);const spent=me.reduce((a,e)=>a+e.amount,0);
+  const rem=d.mb-spent;const pct=d.mb>0?Math.min(spent/d.mb,1):0;
+  const dr=dM()-dE();const daily=dr>0?Math.floor(rem/dr):0;
+  const tp=dE()/dM();const ok=pct<=tp+.05;
+  const lr=lastRec(d.entries);
+  const savE=d.entries.filter(e=>mo(e.df)===tm()&&!e.pid&&e.fromSav);
+  const savSpent=savE.reduce((a,e)=>a+e.amount,0);
+
+  const byCat={};CATS.forEach(c=>(byCat[c.id]={t:0,subs:{}}));
+  me.forEach(e=>{if(!byCat[e.cat])return;byCat[e.cat].t+=e.amount;const sub=e.sub||"其他";byCat[e.cat].subs[sub]=(byCat[e.cat].subs[sub]||0)+e.amount});
+  const ap=d.pj.filter(p=>!p.closed);
+
+  return<div style={{paddingBottom:88}}>
+    {/* Dark hero */}
+    <div style={{background:"#000",padding:"env(safe-area-inset-top) 0 0"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px 4px"}}>
+        <span style={{...T.headline,color:"#fff"}}>{nw().getMonth()+1}月</span>
+        <div style={{display:"flex",gap:16}}>
+          <button style={S.dkIco} onClick={()=>go("hist")}>
+            <svg width="22" height="22" fill="none" stroke="rgba(255,255,255,.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          </button>
+          <button style={S.dkIco} onClick={()=>go("sett")}>
+            <svg width="22" height="22" fill="none" stroke="rgba(255,255,255,.6)" strokeWidth="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      {lr&&lr<td()&&<p style={{fontSize:13,color:"#2997ff",padding:"0 20px 6px",fontFamily:"var(--font-zh)"}}>📅 上次记到{fDF(lr)} · {cD(lr,td())-1}天未记</p>}
+
+      <div style={{textAlign:"center",padding:"12px 20px 28px"}}>
+        <p style={{fontSize:13,color:"rgba(255,255,255,.48)",fontFamily:"var(--font-zh)"}}>本月还可以花</p>
+        <p className="num" style={{fontSize:56,fontWeight:700,color:rem>=0?"var(--green)":"var(--red)",lineHeight:1.05,letterSpacing:-1.5,margin:"2px 0"}}>
+          <span style={{fontSize:28,fontWeight:400}}>¥</span>{fmF(rem)}
+        </p>
+        {rem<0&&<span style={{display:"inline-block",fontSize:12,fontWeight:600,color:"var(--red)",background:"rgba(255,59,48,.15)",padding:"3px 12px",borderRadius:980,marginTop:4,fontFamily:"var(--font-zh)"}}>超支</span>}
+        <div style={{position:"relative",height:4,borderRadius:2,background:"rgba(255,255,255,.1)",margin:"20px auto 0",maxWidth:320}}>
+          <div style={{position:"absolute",top:0,left:0,height:4,borderRadius:2,background:ok?"var(--green)":pct>.9?"var(--red)":"var(--orange)",width:`${pct*100}%`,transition:"width .5s ease"}}/>
+          <div style={{position:"absolute",top:-5,left:`${tp*100}%`,width:1.5,height:14,background:"rgba(255,255,255,.3)",borderRadius:1}}/>
+        </div>
+        <p style={{fontSize:12,color:"rgba(255,255,255,.36)",marginTop:8,fontFamily:"var(--font-zh)"}}>{ok?"节奏健康":pct>.9?"预算将尽":"消费略快"}</p>
+      </div>
+    </div>
+
+    {/* Daily allowance + Recon */}
+    <div style={{display:"flex",gap:10,margin:"16px 16px 0"}}>
+      <div style={{...S.card,flex:1,margin:0}}>
+        <p style={{...T.caption2,color:"var(--text3)"}}>日均可花</p>
+        <p className="num" style={{fontSize:32,fontWeight:700,lineHeight:1.1,marginTop:4,color:daily>0?"var(--text1)":"var(--red)"}}>
+          <span style={{fontSize:16,fontWeight:400}}>¥</span>{fmF(Math.max(daily,0))}
+        </p>
+        <p className="num" style={{...T.caption2,color:"var(--text3)",marginTop:2}}>剩余 {dr} 天</p>
+      </div>
+      <button onClick={()=>go("recon")} style={{...S.card,flex:1,margin:0,border:"none",textAlign:"left"}}>
+        <p style={{...T.caption2,color:"var(--link)"}}>🔄 对账</p>
+        <p style={{...T.subhead,marginTop:6}}>核对余额</p>
+        <p style={{...T.caption2,color:"var(--text3)",marginTop:2}}>记录差额消费</p>
+      </button>
+    </div>
+
+    {savSpent>0&&<div style={{margin:"8px 16px 0",padding:"10px 16px",background:"var(--card)",borderRadius:12}}>
+      <p style={{...T.caption1,color:"var(--text2)"}}>本月从储蓄池支出 <span className="num" style={{fontWeight:600,color:"var(--red)"}}>¥{fmF(savSpent)}</span>（不计入月预算）</p>
+    </div>}
+
+    {/* Categories */}
+    <div style={{...S.card,margin:"12px 16px 0"}}>
+      <p style={{...T.subhead,fontWeight:600,marginBottom:14}}>分类消费</p>
+      {CATS.filter(c=>byCat[c.id].t>0).map(c=>{
+        const ct=byCat[c.id];const bg=d.cb[c.id];
+        const avgD=c.avg==="wd"?wdE():dE();const avg=avgD>0?Math.round(ct.t/avgD):0;
+        return<CatRow key={c.id} c={c} a={ct.t} bg={bg} subs={ct.subs} avg={avg}/>;
+      })}
+      {CATS.every(c=>byCat[c.id].t===0)&&<p style={{...T.body2,textAlign:"center",padding:"16px 0"}}>本月还没有记录</p>}
+    </div>
+
+    <button style={{...S.card,margin:"10px 16px 0",width:"calc(100% - 32px)",border:"none",display:"flex",justifyContent:"space-between",alignItems:"center"}} onClick={()=>go("pay")}>
+      <span style={T.subhead}>💳 支付方式</span>
+      <span style={{...T.subhead,color:"var(--link)"}}>查看 ›</span>
+    </button>
+
+    <div style={{...S.card,margin:"10px 16px 0"}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+        <span style={T.subhead}>📂 专项</span>
+        <span style={{...T.subhead,color:"var(--link)",cursor:"pointer"}} onClick={()=>go("pjl")}>管理 ›</span>
+      </div>
+      {ap.length===0&&<p style={{...T.body2,textAlign:"center",padding:"12px 0"}}>没有进行中的专项</p>}
+      {ap.slice(0,3).map(p=>{const ps=d.entries.filter(e=>e.pid===p.id).reduce((a,e)=>a+e.amount,0);
+        return<div key={p.id} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderTop:"0.5px solid var(--sep)",cursor:"pointer"}} onClick={()=>go("pjd",p.id)}>
+          <span style={T.body}>{p.icon} {p.name}</span>
+          <span className="num" style={{...T.body,fontWeight:600}}>¥{fmF(ps)}{p.budget>0&&<span style={{color:"var(--text3)",fontWeight:400}}>/{fmF(p.budget)}</span>}</span>
+        </div>})}
+    </div>
+  </div>;
+}
+
+function CatRow({c,a,bg,subs,avg}){
+  const[open,setO]=useState(false);const pct=bg?Math.min(a/bg,1):0;const over=bg&&a>bg;
+  return<div style={{marginBottom:10}}>
+    <div style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}} onClick={()=>Object.keys(subs).length>1&&setO(!open)}>
+      <span style={{fontSize:15,width:22,textAlign:"center"}}>{c.icon}</span>
+      <span style={{...T.caption1,width:48,fontFamily:"var(--font-zh)"}}>{c.name}</span>
+      <div className="trk" style={{flex:1}}><div style={{background:over?"var(--red)":c.color,width:`${bg?pct*100:Math.min(a/3000*100,100)}%`}}/></div>
+      <span className="num" style={{fontSize:14,fontWeight:600,width:88,textAlign:"right",color:over?"var(--red)":"var(--text1)"}}>
+        {fmF(a)}{bg?<span style={{color:"var(--text3)",fontWeight:400}}>/{fmF(bg)}</span>:""}
+      </span>
+      {Object.keys(subs).length>1&&<span style={{fontSize:9,color:"var(--text3)"}}>{open?"▲":"▼"}</span>}
+    </div>
+    <p className="num" style={{paddingLeft:28,fontSize:12,color:"var(--text3)",marginTop:1}}>日均 ¥{fmF(avg)}{c.avg==="wd"?" (工作日)":""}</p>
+    {open&&<div style={{paddingLeft:28,paddingTop:4}}>{Object.entries(subs).sort((a,b)=>b[1]-a[1]).map(([n,v])=><div key={n} style={{display:"flex",justifyContent:"space-between",...T.caption2,color:"var(--text2)",padding:"3px 0"}}><span>{n}</span><span className="num">¥{fmF(v)}</span></div>)}</div>}
+  </div>;
+}
+
+/* ═══ RECON ═══ */
+function Recon({d,s,go}){
+  const me=gMe(d.entries);const spent=me.reduce((a,e)=>a+e.amount,0);const appRem=d.mb-spent;
+  const[act,sAct]=useState(""),[step,sSt]=useState(0),[items,sI]=useState([]);
+  const gap=+act>0?(appRem-+act):0;const rec=items.reduce((a,i)=>a+i.amount,0);const unacc=gap-rec;
+  const lr=lastRec(d.entries);
+  const nd=lr?(()=>{const x=new Date(lr);x.setDate(x.getDate()+1);return`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`})():td();
+
+  if(step===0)return<Page><TB t="对账" ob={()=>go("home")}/>
+    <div style={{padding:"0 20px"}}>
+      <div style={{...S.card,margin:"0 0 20px",textAlign:"center"}}>
+        <p style={{...T.caption1,color:"var(--text2)"}}>软件认为你还剩</p>
+        <p className="num" style={{fontSize:40,fontWeight:700,lineHeight:1.1,margin:"6px 0"}}><span style={{fontSize:20,fontWeight:400}}>¥</span>{fmF(appRem)}</p>
+      </div>
+      <label style={T.caption1}>你的实际余额</label>
+      <p style={{...T.caption2,color:"var(--text3)",margin:"2px 0 8px"}}>各渠道余额加总后填入</p>
+      <input style={{...S.inp,fontSize:28,textAlign:"center",fontWeight:600,fontFamily:"var(--font-num)"}} type="number" inputMode="decimal" placeholder="实际余额" value={act} onChange={e=>sAct(e.target.value)} autoFocus/>
+      {+act>0&&<div style={{...S.card,margin:"20px 0",textAlign:"center"}}>
+        <p style={{...T.caption1,color:"var(--text2)"}}>未记录消费</p>
+        <p className="num" style={{fontSize:40,fontWeight:700,color:gap>0?"var(--orange)":"var(--green)",lineHeight:1.1,margin:"6px 0"}}><span style={{fontSize:20,fontWeight:400}}>¥</span>{fmF(gap)}</p>
+        {gap<=0&&<p style={{...T.body,color:"var(--green)"}}>✓ 账目一致</p>}
+      </div>}
+      {+act>0&&gap>0&&<button style={S.btnP} onClick={()=>sSt(1)}>开始记录差额</button>}
+      {+act>0&&gap<=0&&<button style={S.btnS} onClick={()=>go("home")}>返回首页</button>}
+    </div>
+  </Page>;
+
+  return<Page><TB t="记录差额" ob={()=>sSt(0)}/>
+    <div style={{padding:"0 20px 120px"}}>
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        {[["差额","var(--orange)",gap],["已记","var(--green)",rec],["待分",unacc>10?"var(--red)":"var(--green)",Math.max(unacc,0)]].map(([l,c,v])=>
+          <div key={l} style={{...S.card,flex:1,margin:0,padding:12,textAlign:"center"}}>
+            <p style={{...T.caption2,color:"var(--text3)"}}>{l}</p>
+            <p className="num" style={{fontSize:20,fontWeight:700,color:c,marginTop:2}}>¥{fmF(v)}</p>
+          </div>)}
+      </div>
+      {lr&&lr<td()&&<p style={{fontSize:13,color:"var(--link)",background:"rgba(0,113,227,.05)",padding:"10px 14px",borderRadius:12,marginBottom:14,fontFamily:"var(--font-zh)"}}>📅 从{fDF(nd)}开始补记</p>}
+
+      {items.map((it,i)=>{const c=CATS.find(x=>x.id===it.cat)||CATS[10];
+        return<div key={i} style={{display:"flex",alignItems:"center",padding:"12px 0",borderBottom:"0.5px solid var(--sep)",gap:10}}>
+          <span>{c.icon}</span>
+          <div style={{flex:1}}>
+            <p style={T.body}>{c.name}{it.fromSav?" 💰":""}</p>
+            <p style={{...T.caption2,color:"var(--text3)"}}>{fD(it.df)}{it.dt&&it.dt!==it.df?"→"+fD(it.dt):""}{it.note?" · "+it.note:""}</p>
+          </div>
+          <span className="num" style={{...T.body,fontWeight:600}}>¥{fmF(it.amount)}</span>
+          <button style={{background:"none",border:"none",color:"var(--text3)",fontSize:18,padding:4}} onClick={()=>sI(items.filter((_,j)=>j!==i))}>✕</button>
+        </div>})}
+
+      <EntryForm onAdd={it=>sI([...items,it])} nd={nd}/>
+
+      {unacc>10&&<div style={{marginTop:16,padding:14,background:"rgba(0,113,227,.04)",borderRadius:14}}>
+        <p style={{...T.subhead,fontWeight:600,marginBottom:10}}>⚡ 快速分配 ¥{fmF(unacc)}</p>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {[["work_meal","工作餐","🏢"],["transport","交通","🚇"],["home_food","在家吃","🍜"]].map(([id,nm,ic])=>
+            <button key={id} onClick={()=>sI([...items,{amount:Math.round(unacc),cat:id,sub:"其他",pay:"wechat",df:nd,dt:td(),note:"对账补录",fromSav:false}])} style={S.pill}>{ic} {nm}</button>)}
+        </div>
+      </div>}
+
+      <button style={{...S.btnP,marginTop:20}} onClick={()=>{
+        if(!items.length)return;
+        const ne=items.map(it=>({id:uid(),amount:it.amount,cat:it.cat,sub:it.sub||"其他",pay:it.pay||"wechat",note:it.note||"",df:it.df,dt:it.dt||it.df,pid:null,fromSav:!!it.fromSav}));
+        let sp=d.sp;ne.filter(e=>e.fromSav).forEach(e=>{sp=Math.max(0,sp-e.amount)});
+        s({...d,entries:[...d.entries,...ne],sp});go("home");
+      }}>保存全部（{items.length}笔）</button>
+    </div>
+  </Page>;
+}
+
+/* Shared entry form for Recon & elsewhere */
+function EntryForm({onAdd,nd}){
+  const[show,sS]=useState(false),[amt,sA]=useState(""),[cat,sC]=useState(""),[sub,sSub]=useState(""),[pay,sP]=useState(""),[df,sDF]=useState(nd||td()),[dt,sDT]=useState(td()),[note,sN]=useState(""),[fromSav,sFS]=useState(false);
+  const sc=CATS.find(c=>c.id===cat);
+  const reset=()=>{sA("");sC("");sSub("");sN("");sFS(false);sS(false)};
+  if(!show)return<button onClick={()=>sS(true)} style={{width:"100%",padding:14,marginTop:14,fontSize:15,fontWeight:500,borderRadius:12,border:"1px dashed var(--sep)",background:"transparent",color:"var(--link)",fontFamily:"var(--font-zh)"}}>+ 添加一笔</button>;
+  return<div style={{marginTop:14,padding:16,background:"var(--card)",borderRadius:16}}>
+    <div style={{display:"flex",gap:8,marginBottom:12}}>
+      <div style={{flex:1}}><label style={{...T.caption2,color:"var(--text3)"}}>开始日期</label><input style={S.inp} type="date" value={df} onChange={e=>sDF(e.target.value)}/></div>
+      <div style={{flex:1}}><label style={{...T.caption2,color:"var(--text3)"}}>结束日期</label><input style={S.inp} type="date" value={dt} onChange={e=>sDT(e.target.value)}/></div>
+    </div>
+    <input className="num" style={{...S.inp,fontSize:24,fontWeight:600,textAlign:"center",marginBottom:12}} type="number" inputMode="decimal" placeholder="金额" value={amt} onChange={e=>sA(e.target.value)} autoFocus/>
+    <div style={{...S.cg,marginBottom:10}}>{CATS.map(c=><Pill key={c.id} on={cat===c.id} cl={c.color} ck={()=>{sC(c.id);sSub("")}}>{c.icon}{c.name}</Pill>)}</div>
+    {sc&&<div style={{...S.cg,marginBottom:10}}>{sc.subs.map(x=><Pill key={x} on={sub===x} cl={sc.color} ck={()=>sSub(sub===x?"":x)} sm>{x}</Pill>)}</div>}
+    <div style={{...S.cg,marginBottom:10}}>{PAYS.map(p=><Pill key={p.id} on={pay===p.id} cl="#636366" ck={()=>sP(p.id)} sm>{p.icon}{p.name}</Pill>)}</div>
+    <Toggle on={fromSav} ck={()=>sFS(!fromSav)} label="💰 从储蓄池扣除"/>
+    {fromSav&&<p style={{...T.caption2,color:"var(--green)",marginBottom:8}}>此笔不计入月预算</p>}
+    <input style={{...S.inp,marginBottom:12}} placeholder="备注（可选）" value={note} onChange={e=>sN(e.target.value)}/>
+    <div style={{display:"flex",gap:8}}><button style={S.btnS} onClick={reset}>取消</button><button style={S.btnP} onClick={()=>{if(!amt||+amt<=0||!cat)return;onAdd({amount:+amt,cat,sub:sub||"其他",pay:pay||"wechat",df,dt,note,fromSav});reset()}}>添加</button></div>
+  </div>;
+}
+
+/* ═══ ADD ═══ */
+function Add({d,s,gb,pid}){
+  const[amt,sA]=useState(""),[cat,sC]=useState(""),[sub,sSub]=useState(""),[pay,sP]=useState(""),[note,sN]=useState(""),[df,sDF]=useState(td()),[dt,sDT]=useState(td()),[fromSav,sFS]=useState(false);
+  const sc=CATS.find(c=>c.id===cat);
+  const submit=()=>{if(!amt||+amt<=0||!cat)return;const e={id:uid(),amount:+amt,cat,sub:sub||"其他",pay:pay||"wechat",note,df,dt,pid:pid||null,fromSav:!!fromSav};let sp=d.sp;if(fromSav)sp=Math.max(0,sp-e.amount);s({...d,entries:[...d.entries,e],sp});gb()};
+  return<Page><TB t={pid?"专项记账":"记一笔"} ob={gb}/>
+    <div style={{padding:"0 20px 100px"}}>
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        <div style={{flex:1}}><label style={{...T.caption2,color:"var(--text3)"}}>开始</label><input style={S.inp} type="date" value={df} onChange={e=>sDF(e.target.value)}/></div>
+        <div style={{flex:1}}><label style={{...T.caption2,color:"var(--text3)"}}>结束</label><input style={S.inp} type="date" value={dt} onChange={e=>sDT(e.target.value)}/></div>
+      </div>
+      <input className="num" style={{...S.inp,fontSize:32,textAlign:"center",fontWeight:700}} type="number" inputMode="decimal" placeholder="0" value={amt} onChange={e=>sA(e.target.value)} autoFocus/>
+      {df!==dt&&+amt>0&&<p className="num" style={{...T.caption2,color:"var(--text2)",textAlign:"center",marginTop:6}}>共{cD(df,dt)}天 · 日均 ¥{fmF(Math.round(+amt/cD(df,dt)))}</p>}
+      <p style={{...T.caption1,marginTop:18}}>分类</p>
+      <div style={S.cg}>{CATS.map(c=><Pill key={c.id} on={cat===c.id} cl={c.color} ck={()=>{sC(c.id);sSub("")}}>{c.icon} {c.name}</Pill>)}</div>
+      {sc&&<><p style={{...T.caption1,marginTop:14}}>细分</p><div style={S.cg}>{sc.subs.map(x=><Pill key={x} on={sub===x} cl={sc.color} ck={()=>sSub(sub===x?"":x)} sm>{x}</Pill>)}</div></>}
+      <p style={{...T.caption1,marginTop:18}}>支付方式</p>
+      <div style={S.cg}>{PAYS.map(p=><Pill key={p.id} on={pay===p.id} cl="#636366" ck={()=>sP(p.id)}>{p.icon} {p.name}</Pill>)}</div>
+      {!pid&&<><Toggle on={fromSav} ck={()=>sFS(!fromSav)} label="💰 从储蓄池扣除" style={{marginTop:18}}/>
+        {fromSav&&<p style={{...T.caption2,color:"var(--green)"}}>不计入月预算</p>}</>}
+      <input style={{...S.inp,marginTop:14}} placeholder="备注（可选）" value={note} onChange={e=>sN(e.target.value)}/>
+      <button style={{...S.btnP,marginTop:24}} onClick={submit}>记下来</button>
+    </div></Page>;
+}
+
+/* ═══ EDIT ═══ */
+function Edit({d,s,gb,eid}){
+  const e=d.entries.find(x=>x.id===eid);if(!e)return<Page><TB t="?" ob={gb}/></Page>;
+  const[amt,sA]=useState(String(e.amount)),[cat,sC]=useState(e.cat),[sub,sSub]=useState(e.sub||""),[pay,sP]=useState(e.pay||""),[note,sN]=useState(e.note||""),[df,sDF]=useState(e.df||""),[dt,sDT]=useState(e.dt||""),[fromSav,sFS]=useState(!!e.fromSav);
+  const sc=CATS.find(c=>c.id===cat);
+  const doSave=()=>{if(!amt||+amt<=0||!cat)return;let sp=d.sp;if(e.fromSav)sp+=e.amount;if(fromSav)sp=Math.max(0,sp-+amt);s({...d,entries:d.entries.map(x=>x.id===eid?{...x,amount:+amt,cat,sub:sub||"其他",pay:pay||"wechat",note,df,dt,fromSav}:x),sp});gb()};
+  return<Page><TB t="编辑" ob={gb}/><div style={{padding:"0 20px 100px"}}>
+    <div style={{display:"flex",gap:8,marginBottom:12}}>
+      <div style={{flex:1}}><label style={{...T.caption2,color:"var(--text3)"}}>开始</label><input style={S.inp} type="date" value={df} onChange={e=>sDF(e.target.value)}/></div>
+      <div style={{flex:1}}><label style={{...T.caption2,color:"var(--text3)"}}>结束</label><input style={S.inp} type="date" value={dt} onChange={e=>sDT(e.target.value)}/></div>
+    </div>
+    <input className="num" style={{...S.inp,fontSize:28,textAlign:"center",fontWeight:700}} type="number" inputMode="decimal" value={amt} onChange={e=>sA(e.target.value)}/>
+    <p style={{...T.caption1,marginTop:16}}>分类</p>
+    <div style={S.cg}>{CATS.map(c=><Pill key={c.id} on={cat===c.id} cl={c.color} ck={()=>{sC(c.id);sSub("")}}>{c.icon} {c.name}</Pill>)}</div>
+    {sc&&<><p style={{...T.caption1,marginTop:12}}>细分</p><div style={S.cg}>{sc.subs.map(x=><Pill key={x} on={sub===x} cl={sc.color} ck={()=>sSub(sub===x?"":x)} sm>{x}</Pill>)}</div></>}
+    <p style={{...T.caption1,marginTop:16}}>支付方式</p>
+    <div style={S.cg}>{PAYS.map(p=><Pill key={p.id} on={pay===p.id} cl="#636366" ck={()=>sP(p.id)}>{p.icon} {p.name}</Pill>)}</div>
+    <Toggle on={fromSav} ck={()=>sFS(!fromSav)} label="💰 从储蓄池扣除" style={{marginTop:16}}/>
+    <input style={{...S.inp,marginTop:10}} placeholder="备注" value={note} onChange={e=>sN(e.target.value)}/>
+    <button style={{...S.btnP,marginTop:20}} onClick={doSave}>保存修改</button>
+    <button style={{...S.btnS,marginTop:10,color:"var(--red)"}} onClick={()=>{if(!confirm("删除？"))return;let sp=d.sp;if(e.fromSav)sp+=e.amount;s({...d,entries:d.entries.filter(x=>x.id!==eid),sp});gb()}}>删除</button>
+  </div></Page>;
+}
+
+/* ═══ HISTORY ═══ */
+function Hist({d,s,go}){
+  const sorted=[...d.entries].sort((a,b)=>((b.dt||b.df)>(a.dt||a.df)?1:-1));
+  const grouped={};sorted.forEach(e=>{const k=mo(e.df);if(!grouped[k])grouped[k]=[];grouped[k].push(e)});
+  return<Page><TB t="历史记录" ob={()=>go("home")}/><div style={{padding:"0 16px 40px"}}>
+    {!sorted.length&&<p style={{...T.body2,textAlign:"center",padding:"24px 0"}}>还没有记录</p>}
+    {Object.entries(grouped).map(([m,es])=><div key={m}>
+      <p className="num" style={{...T.caption1,color:"var(--text3)",margin:"20px 0 6px"}}>{m} · ¥{fmF(es.reduce((a,e)=>a+e.amount,0))}</p>
+      {es.map(e=>{const c=CATS.find(x=>x.id===e.cat)||CATS[10];const p=PAYS.find(x=>x.id===e.pay);
+        const dl=(e.df===e.dt||!e.dt)?fD(e.df):`${fD(e.df)}→${fD(e.dt)}`;const days=cD(e.df,e.dt||e.df);
+        return<div key={e.id} style={{display:"flex",alignItems:"center",padding:"14px 0",borderBottom:"0.5px solid var(--sep)",gap:10,cursor:"pointer"}} onClick={()=>go("edit",e.id)}>
+          <span style={{fontSize:20}}>{c.icon}</span>
+          <div style={{flex:1}}>
+            <p style={T.body}>{c.name}{e.sub&&e.sub!=="其他"?" · "+e.sub:""}{e.fromSav?" 💰":""}</p>
+            <p style={{...T.caption2,color:"var(--text3)"}}>{dl}{days>1?` (${days}天)`:""}{p?" · "+p.icon:""}{e.note?" · "+e.note:""}</p>
+          </div>
+          <span className="num" style={{...T.body,fontWeight:600}}>¥{fmF(e.amount)}</span>
+          <span style={{color:"var(--text3)",fontSize:16}}>›</span>
+        </div>})}</div>)}
+  </div></Page>;
+}
+
+/* ═══ SAVINGS — restructured ═══ */
+function Sav({d,s,go}){
+  const[amt,sA]=useState(""),[note,sN]=useState("");
+
+  // Historical totals
+  const allDep=d.sl.filter(l=>l.t==="d").reduce((a,l)=>a+l.a,0);
+  const allWit=d.sl.filter(l=>l.t==="w").reduce((a,l)=>a+l.a,0);
+  // Consumer deductions (fromSav entries) all time
+  const allSavSpent=d.entries.filter(e=>e.fromSav).reduce((a,e)=>a+e.amount,0);
+
+  // This month
+  const md=d.sl.filter(l=>mo(l.date)===tm()&&l.t==="d").reduce((a,l)=>a+l.a,0);
+  const mw=d.sl.filter(l=>mo(l.date)===tm()&&l.t==="w").reduce((a,l)=>a+l.a,0);
+  const mSavSpent=d.entries.filter(e=>mo(e.df)===tm()&&e.fromSav).reduce((a,e)=>a+e.amount,0);
+
+  const act=t=>{if(!amt||+amt<=0)return;if(t==="w"&&+amt>d.sp)return alert("余额不足");s({...d,sp:t==="d"?d.sp+ +amt:d.sp- +amt,sl:[...d.sl,{id:uid(),t,a:+amt,date:new Date().toISOString(),note}]});sA("");sN("")};
+  const rec=[...d.sl].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,20);
+
+  return<div style={{paddingBottom:88}}>
+    {/* Dark hero - total pool */}
+    <div style={{background:"#000",padding:"env(safe-area-inset-top) 0 0"}}>
+      <div style={{padding:"16px 20px 4px"}}><span style={{...T.headline,color:"#fff"}}>🎯 储蓄</span></div>
+      <div style={{textAlign:"center",padding:"20px 20px 32px"}}>
+        <p style={{fontSize:13,color:"rgba(255,255,255,.48)",fontFamily:"var(--font-zh)"}}>储蓄池总余额</p>
+        <p className="num" style={{fontSize:56,fontWeight:700,color:"#fff",lineHeight:1.05,letterSpacing:-1.5,margin:"4px 0"}}>
+          <span style={{fontSize:28,fontWeight:400}}>¥</span>{fmF(d.sp)}
+        </p>
+        <div style={{display:"flex",justifyContent:"center",gap:24,marginTop:16}}>
+          <div style={{textAlign:"center"}}>
+            <p style={{fontSize:11,color:"rgba(255,255,255,.36)",fontFamily:"var(--font-zh)"}}>累计存入</p>
+            <p className="num" style={{fontSize:17,fontWeight:600,color:"var(--green)",marginTop:2}}>+{fmF(allDep)}</p>
+          </div>
+          <div style={{textAlign:"center"}}>
+            <p style={{fontSize:11,color:"rgba(255,255,255,.36)",fontFamily:"var(--font-zh)"}}>累计取出</p>
+            <p className="num" style={{fontSize:17,fontWeight:600,color:"var(--orange)",marginTop:2}}>-{fmF(allWit)}</p>
+          </div>
+          <div style={{textAlign:"center"}}>
+            <p style={{fontSize:11,color:"rgba(255,255,255,.36)",fontFamily:"var(--font-zh)"}}>消费支出</p>
+            <p className="num" style={{fontSize:17,fontWeight:600,color:"var(--red)",marginTop:2}}>-{fmF(allSavSpent)}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Monthly goal section */}
+    {d.sg>0&&<div style={{...S.card,margin:"16px 16px 0"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <p style={{...T.subhead,fontWeight:600}}>本月储蓄目标</p>
+        {md>=d.sg&&<span style={{fontSize:12,fontWeight:600,color:"var(--green)",background:"rgba(52,199,89,.1)",padding:"2px 10px",borderRadius:980}}>🎉 已达成</span>}
+      </div>
+      <div style={{display:"flex",alignItems:"baseline",gap:4,margin:"8px 0 10px"}}>
+        <span className="num" style={{fontSize:28,fontWeight:700}}><span style={{fontSize:14,fontWeight:400}}>¥</span>{fmF(md)}</span>
+        <span className="num" style={{fontSize:15,color:"var(--text3)"}}>/ ¥{fmF(d.sg)}</span>
+      </div>
+      <div className="trk" style={{height:6,borderRadius:3}}><div style={{height:6,borderRadius:3,background:md>=d.sg?"var(--green)":"var(--blue)",width:`${Math.min(md/d.sg*100,100)}%`}}/></div>
+    </div>}
+
+    {/* This month stats */}
+    <div style={{display:"flex",gap:10,margin:"12px 16px 0"}}>
+      <div style={{...S.card,flex:1,margin:0,textAlign:"center"}}>
+        <p style={{...T.caption2,color:"var(--text3)",fontFamily:"var(--font-zh)"}}>本月存入</p>
+        <p className="num" style={{fontSize:24,fontWeight:700,color:"var(--green)",marginTop:4}}>+{fmF(md)}</p>
+      </div>
+      <div style={{...S.card,flex:1,margin:0,textAlign:"center"}}>
+        <p style={{...T.caption2,color:"var(--text3)",fontFamily:"var(--font-zh)"}}>本月取出</p>
+        <p className="num" style={{fontSize:24,fontWeight:700,color:"var(--orange)",marginTop:4}}>-{fmF(mw)}</p>
+      </div>
+      {mSavSpent>0&&<div style={{...S.card,flex:1,margin:0,textAlign:"center"}}>
+        <p style={{...T.caption2,color:"var(--text3)",fontFamily:"var(--font-zh)"}}>消费扣除</p>
+        <p className="num" style={{fontSize:24,fontWeight:700,color:"var(--red)",marginTop:4}}>-{fmF(mSavSpent)}</p>
+      </div>}
+    </div>
+
+    {/* Deposit/withdraw */}
+    <div style={{...S.card,margin:"12px 16px 0"}}>
+      <p style={{...T.subhead,fontWeight:600,marginBottom:12}}>存入 / 取出</p>
+      <input className="num" style={{...S.inp,marginBottom:8}} type="number" inputMode="decimal" placeholder="金额" value={amt} onChange={e=>sA(e.target.value)}/>
+      <input style={{...S.inp,marginBottom:10}} placeholder="备注（可选）" value={note} onChange={e=>sN(e.target.value)}/>
+      <div style={{display:"flex",gap:8}}>
+        <button style={S.btnP} onClick={()=>act("d")}>存入</button>
+        <button style={{...S.btnS,color:"var(--red)"}} onClick={()=>act("w")}>取出</button>
+      </div>
+    </div>
+
+    {/* Recent history */}
+    {rec.length>0&&<div style={{...S.card,margin:"12px 16px 0"}}>
+      <p style={{...T.subhead,fontWeight:600,marginBottom:10}}>操作记录</p>
+      {rec.map(l=><div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"0.5px solid var(--sep)"}}>
+        <div>
+          <span style={T.body}>{new Date(l.date).toLocaleDateString("zh-CN",{month:"numeric",day:"numeric"})}</span>
+          {l.note&&<span style={{...T.caption2,color:"var(--text3)",marginLeft:8}}>{l.note}</span>}
+        </div>
+        <span className="num" style={{fontWeight:600,color:l.t==="d"?"var(--green)":"var(--red)"}}>{l.t==="d"?"+":"-"}¥{fmF(l.a)}</span>
+      </div>)}
+    </div>}
+  </div>;
+}
+
+/* ═══ PROJECTS ═══ */
+function PjL({d,s,go}){
+  const[nm,sN]=useState(""),[bg,sB]=useState(""),[ic,sI]=useState("✈️");
+  const icons=["✈️","🏠","🎓","💍","🎉","🏥","📱","🚗"];
+  return<Page><TB t="专项模块" ob={()=>go("home")}/><div style={{padding:"0 20px 40px"}}>
+    <div style={{...S.card,margin:"0 0 16px"}}><p style={{...T.subhead,fontWeight:600,marginBottom:12}}>新建</p>
+      <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>{icons.map(i=><button key={i} onClick={()=>sI(i)} style={{fontSize:22,padding:6,borderRadius:10,border:ic===i?"2px solid var(--text1)":"2px solid transparent",background:"none"}}>{i}</button>)}</div>
+      <input style={{...S.inp,marginBottom:8}} placeholder="名称" value={nm} onChange={e=>sN(e.target.value)}/>
+      <input className="num" style={{...S.inp,marginBottom:10}} type="number" inputMode="numeric" placeholder="预算（可选）" value={bg} onChange={e=>sB(e.target.value)}/>
+      <button style={S.btnP} onClick={()=>{if(!nm.trim())return;s({...d,pj:[...d.pj,{id:uid(),name:nm.trim(),icon:ic,budget:+bg||0,closed:false}]});sN("");sB("")}}>创建</button>
+    </div>
+    {d.pj.map(p=>{const ps=d.entries.filter(e=>e.pid===p.id).reduce((a,e)=>a+e.amount,0);
+      return<div key={p.id} style={{...S.card,margin:"0 0 10px",opacity:p.closed?.5:1,cursor:"pointer"}} onClick={()=>go("pjd",p.id)}>
+        <div style={{display:"flex",justifyContent:"space-between"}}><span style={{...T.body,fontWeight:600}}>{p.icon} {p.name}{p.closed?" (已结束)":""}</span><span className="num" style={{...T.body,fontWeight:600}}>¥{fmF(ps)}{p.budget>0&&<span style={{color:"var(--text3)",fontWeight:400,fontSize:13}}> / {fmF(p.budget)}</span>}</span></div>
+        {p.budget>0&&<div className="trk" style={{marginTop:8}}><div style={{background:ps>p.budget?"var(--red)":"var(--blue)",width:`${Math.min(ps/p.budget*100,100)}%`}}/></div>}
+      </div>})}
+  </div></Page>;
+}
+function PjD({d,s,go,pid}){
+  const pj=d.pj.find(p=>p.id===pid);if(!pj)return<Page><TB t="?" ob={()=>go("pjl")}/></Page>;
+  const ents=d.entries.filter(e=>e.pid===pid).sort((a,b)=>((b.dt||b.df)>(a.dt||a.df)?1:-1));const spent=ents.reduce((a,e)=>a+e.amount,0);
+  return<Page><TB t={`${pj.icon} ${pj.name}`} ob={()=>go("pjl")}/><div style={{padding:"0 20px 40px"}}>
+    <div style={{...S.card,margin:"0 0 12px",textAlign:"center"}}>
+      <p style={{...T.caption1,color:"var(--text2)"}}>已花费</p>
+      <p className="num" style={{fontSize:34,fontWeight:700,margin:"4px 0"}}><span style={{fontSize:16,fontWeight:400}}>¥</span>{fmF(spent)}{pj.budget>0&&<span style={{fontSize:15,color:"var(--text3)",fontWeight:400}}> / {fmF(pj.budget)}</span>}</p>
+      {pj.budget>0&&<div className="trk" style={{height:6,borderRadius:3}}><div style={{height:6,borderRadius:3,background:spent>pj.budget?"var(--red)":"var(--green)",width:`${Math.min(spent/pj.budget*100,100)}%`}}/></div>}
+    </div>
+    <div style={{display:"flex",gap:8,marginBottom:16}}><button style={S.btnP} onClick={()=>go("add",pid)}>记一笔</button>{!pj.closed&&<button style={S.btnS} onClick={()=>s({...d,pj:d.pj.map(p=>p.id===pid?{...p,closed:true}:p)})}>结束</button>}</div>
+    {ents.map(e=>{const c=CATS.find(x=>x.id===e.cat)||CATS[10];return<div key={e.id} style={{display:"flex",alignItems:"center",padding:"12px 0",borderBottom:"0.5px solid var(--sep)",gap:10}}>
+      <span>{c.icon}</span><div style={{flex:1}}><p style={T.body}>{c.name}</p><p style={{...T.caption2,color:"var(--text3)"}}>{fD(e.df)}{e.dt&&e.dt!==e.df?"→"+fD(e.dt):""}{e.note?" · "+e.note:""}</p></div><span className="num" style={{...T.body,fontWeight:600}}>¥{fmF(e.amount)}</span></div>})}
+    {!ents.length&&<p style={{...T.body2,textAlign:"center",padding:"20px 0"}}>还没有记录</p>}
+  </div></Page>;
+}
+
+/* ═══ PAYMENT ═══ */
+function PayB({d,gb}){
+  const me=gMeAll(d.entries);const byP={};PAYS.forEach(p=>(byP[p.id]=0));me.forEach(e=>(byP[e.pay]=(byP[e.pay]||0)+e.amount));const tot=me.reduce((a,e)=>a+e.amount,0);
+  return<Page><TB t="支付方式" ob={gb}/><div style={{padding:"0 20px"}}>
+    {PAYS.map(p=>{const a=byP[p.id]||0;if(!a)return null;return<div key={p.id} style={{marginBottom:18}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+        <span style={T.body}>{p.icon} {p.name}</span>
+        <span className="num" style={{...T.body,fontWeight:600}}>¥{fmF(a)}<span style={{fontWeight:400,color:"var(--text3)",fontSize:13}}> ({tot>0?Math.round(a/tot*100):0}%)</span></span>
+      </div>
+      <div className="trk"><div style={{background:"var(--blue)",width:`${tot>0?a/tot*100:0}%`}}/></div>
+    </div>})}
+    {tot===0&&<p style={{...T.body2,textAlign:"center",padding:"24px 0"}}>本月还没有记录</p>}
+  </div></Page>;
+}
+
+/* ═══ SETTINGS ═══ */
+function Sett({d,s,gb}){
+  const[b,sB]=useState(String(d.mb)),[sg,sSG]=useState(String(d.sg)),[cb,sCB]=useState({...d.cb});
+  const af=()=>{if(+b<=0)return;const r={};CATS.forEach(c=>{r[c.id]=Math.round(+b*c.pct)});sCB(r)};
+  const tot=Object.values(cb).reduce((a,v)=>a+(+v||0),0);const df=+b-tot;
+  return<Page><TB t="设置" ob={gb}/><div style={{padding:"0 20px 60px"}}>
+    <label style={T.caption1}>每月总预算</label><input className="num" style={S.inp} type="number" inputMode="numeric" value={b} onChange={e=>sB(e.target.value)}/>
+    <label style={{...T.caption1,marginTop:18}}>每月储蓄目标</label><input className="num" style={S.inp} type="number" inputMode="numeric" value={sg} onChange={e=>sSG(e.target.value)}/>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:28}}>
+      <p style={{...T.subhead,fontWeight:600}}>分类预算</p>
+      <button style={{...T.body,color:"var(--link)",background:"none",border:"none",fontWeight:400}} onClick={af}>智能推荐</button>
+    </div>
+    {CATS.map(c=>{const v=cb[c.id]||"";const p=+b>0&&+v>0?Math.round(+v/+b*100):0;return<div key={c.id} style={{display:"flex",alignItems:"center",gap:6,marginTop:8}}>
+      <span style={{width:68,fontSize:13,fontFamily:"var(--font-zh)"}}>{c.icon}{c.name}</span>
+      <input className="num" style={{...S.inp,flex:1}} type="number" inputMode="numeric" placeholder="不限" value={v} onChange={e=>sCB({...cb,[c.id]:e.target.value})}/>
+      <span className="num" style={{width:36,fontSize:13,color:"var(--text3)",textAlign:"right"}}>{p}%</span>
+    </div>})}
+    <p className="num" style={{textAlign:"center",fontSize:14,fontWeight:600,color:df>=0?"var(--green)":"var(--red)",margin:"14px 0"}}>已分配 ¥{fmF(tot)} / ¥{fmF(+b||0)}{df>0?` · 余¥${fmF(df)}`:df<0?` · 超¥${fmF(-df)}`:" ✓"}</p>
+    <button style={{...S.btnP,marginTop:4}} onClick={()=>{const r={};Object.entries(cb).forEach(([k,v])=>{if(+v>0)r[k]=+v});s({...d,mb:+b||d.mb,sg:+sg||0,cb:r});gb()}}>保存</button>
+    <div style={{marginTop:36,padding:16,background:"var(--card)",borderRadius:12}}>
+      <p style={{...T.subhead,fontWeight:600,marginBottom:12}}>数据管理</p>
+      <button style={S.btnS} onClick={()=>{const blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`budget-${td()}.json`;a.click()}}>导出备份</button>
+      <div style={{marginTop:12}}><label style={{...T.caption1,display:"block",marginBottom:4}}>导入备份</label><input type="file" accept=".json" style={{fontSize:13}} onChange={e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const x=JSON.parse(ev.target.result);if(x.entries!==undefined){if(confirm("覆盖当前数据？")){s(x);gb()}}else alert("格式错误")}catch{alert("解析失败")}};r.readAsText(f)}}/></div>
+      <button style={{...S.btnS,marginTop:16,color:"var(--red)"}} onClick={()=>{if(confirm("清空所有数据？此操作不可恢复。")){s(D());gb()}}}>清空所有数据</button>
+    </div>
+  </div></Page>;
+}
+
+/* ═══ SHARED COMPONENTS ═══ */
+function Page({children}){return<div style={{minHeight:"100vh",background:"var(--bg)"}}>{children}</div>}
+function TB({t,ob}){return<div style={{display:"flex",alignItems:"center",padding:"14px 20px 10px",background:"inherit"}}>
+  <button onClick={ob} style={{fontSize:17,background:"none",border:"none",color:"var(--link)",padding:0,fontFamily:"var(--font-sys)"}}>‹ 返回</button>
+  <span style={{flex:1,textAlign:"center",...T.headline}}>{t}</span>
+  <span style={{width:48}}/>
+</div>}
+function Pill({children,on,cl,sm,ck}){return<button onClick={ck} style={{padding:sm?"5px 10px":"8px 14px",fontSize:sm?13:14,borderRadius:980,border:"none",background:on?cl:"rgba(0,0,0,.05)",color:on?"#fff":"var(--text1)",transition:"all .15s",fontFamily:"var(--font-zh)",fontWeight:on?500:400,whiteSpace:"nowrap"}}>{children}</button>}
+function Toggle({on,ck,label,style:sx}){return<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",...sx}}>
+  <span style={{...T.body,fontFamily:"var(--font-zh)"}}>{label}</span>
+  <button onClick={ck} style={{width:51,height:31,borderRadius:16,border:"none",background:on?"var(--green)":"rgba(0,0,0,.1)",position:"relative",transition:"background .2s",padding:0}}>
+    <div style={{width:27,height:27,borderRadius:14,background:"#fff",position:"absolute",top:2,left:on?22:2,transition:"left .2s cubic-bezier(.4,.0,.2,1)",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/>
+  </button>
+</div>}
+
+/* ═══ TYPOGRAPHY (Apple HIG) ═══ */
+const T={
+  largeTitle:{fontSize:34,fontWeight:700,lineHeight:1.12,letterSpacing:.37,fontFamily:"var(--font-zh)"},
+  title1:{fontSize:28,fontWeight:700,lineHeight:1.14,letterSpacing:.36,fontFamily:"var(--font-zh)"},
+  headline:{fontSize:17,fontWeight:600,lineHeight:1.29,letterSpacing:-.41,fontFamily:"var(--font-zh)"},
+  body:{fontSize:17,fontWeight:400,lineHeight:1.29,letterSpacing:-.41,fontFamily:"var(--font-zh)"},
+  body2:{fontSize:17,fontWeight:400,lineHeight:1.29,letterSpacing:-.41,fontFamily:"var(--font-zh)",color:"var(--text2)"},
+  subhead:{fontSize:15,fontWeight:400,lineHeight:1.33,letterSpacing:-.24,fontFamily:"var(--font-zh)"},
+  caption1:{fontSize:14,fontWeight:600,lineHeight:1.29,letterSpacing:-.08,fontFamily:"var(--font-zh)",display:"block",marginBottom:6},
+  caption2:{fontSize:13,fontWeight:400,lineHeight:1.38,letterSpacing:-.08,fontFamily:"var(--font-zh)"},
+};
+
+/* ═══ COMPONENT STYLES ═══ */
+const S={
+  setupBg:{minHeight:"100vh",background:"var(--bg)",display:"flex",justifyContent:"center",alignItems:"center"},
+  setupIn:{padding:"0 32px",textAlign:"center",width:"100%",maxWidth:380},
+  card:{margin:"10px 16px",padding:"16px",background:"var(--card)",borderRadius:12},
+  inp:{display:"block",width:"100%",padding:"12px 16px",fontSize:17,border:"none",borderRadius:12,background:"rgba(0,0,0,.04)",boxSizing:"border-box",fontFamily:"var(--font-sys)",letterSpacing:-.41},
+  btnP:{width:"100%",padding:"16px",fontSize:17,fontWeight:400,borderRadius:14,border:"none",background:"var(--blue)",color:"#fff",fontFamily:"var(--font-zh)",letterSpacing:-.41},
+  btnS:{width:"100%",padding:"16px",fontSize:17,fontWeight:400,borderRadius:14,border:"none",background:"rgba(0,0,0,.04)",color:"var(--text1)",fontFamily:"var(--font-zh)",letterSpacing:-.41},
+  pill:{padding:"8px 16px",borderRadius:980,border:"0.5px solid var(--sep)",background:"var(--card)",fontSize:14,fontFamily:"var(--font-zh)"},
+  cg:{display:"flex",flexWrap:"wrap",gap:6},
+  dkIco:{background:"none",border:"none",padding:0},
+  tabs:{position:"fixed",bottom:0,left:0,right:0,display:"flex",justifyContent:"center",padding:"6px 0 calc(env(safe-area-inset-bottom, 8px) + 8px)",background:"rgba(249,249,249,.94)",backdropFilter:"saturate(180%) blur(20px)",WebkitBackdropFilter:"saturate(180%) blur(20px)",borderTop:"0.5px solid rgba(0,0,0,.12)",zIndex:50},
+  tab:{display:"flex",flexDirection:"column",alignItems:"center",gap:1,background:"none",border:"none",padding:"2px 32px",minWidth:72},
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
