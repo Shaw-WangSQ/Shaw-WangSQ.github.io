@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#F2F2F7">
+<title>轻记账</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+<style>
+:root {
+  --font-zh: -apple-system, 'SF Pro SC', 'PingFang SC', 'Helvetica Neue', sans-serif;
+  --font-num: 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --bg: #F2F2F7; /* iOS System Background */
+  --card: #FFFFFF;
+  --text1: #000000;
+  --text2: #8E8E93; /* iOS Secondary */
+  --text3: #C7C7CC;
+  --sep: rgba(60, 60, 67, 0.29); /* iOS Hairline */
+  --blue: #007AFF;
+  --green: #34C759;
+  --red: #FF3B30;
+  --orange: #FF9500;
+  --purple: #AF52DE;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { height: 100%; -webkit-text-size-adjust: 100%; background: var(--bg); }
+body {
+  font-family: var(--font-zh);
+  background: var(--bg); color: var(--text1);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100%; overflow-x: hidden;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.num { font-family: var(--font-num); font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; }
+input:focus, button:focus { outline: none; }
+button { -webkit-appearance: none; cursor: pointer; background: none; border: none; font-family: inherit; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+input[type=number] { -moz-appearance: textfield; }
+
+/* Apple HIG Inset Grouped List */
+.inset-group { background: var(--card); border-radius: 10px; margin: 0 16px 20px; overflow: hidden; }
+.inset-item { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 0.5px solid var(--sep); background: var(--card); transition: background 0.2s; }
+.inset-item:last-child { border-bottom: none; }
+.inset-item:active { background: #E5E5EA; }
+.inset-label { font-size: 17px; letter-spacing: -0.41px; }
+.inset-value { font-size: 17px; color: var(--text2); text-align: right; }
+
+/* Segmented Control */
+.segmented { display: flex; background: #E5E5EA; border-radius: 8px; padding: 2px; margin: 16px; }
+.seg-btn { flex: 1; padding: 6px 0; font-size: 13px; font-weight: 500; text-align: center; border-radius: 6px; transition: all 0.2s; color: var(--text1); }
+.seg-btn.active { background: var(--card); box-shadow: 0 3px 8px rgba(0,0,0,0.12); }
+
+/* Circular Progress */
+.ring-wrap { position: relative; width: 80px; height: 80px; }
+.ring-circle { fill: none; stroke-width: 8; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; }
+.ring-bg { stroke: #E5E5EA; }
+.ring-fg { stroke: var(--green); transition: stroke-dashoffset 0.8s ease; }
+.ring-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 14px; font-weight: 600; text-align: center; line-height: 1.1; }
+
+.page-title { font-size: 34px; font-weight: 700; letter-spacing: 0.37px; padding: 16px 20px 8px; }
+.section-title { font-size: 13px; font-weight: 400; color: var(--text2); text-transform: uppercase; padding: 0 16px 6px 32px; letter-spacing: -0.08px; }
+
+/* Category Grid */
+.cat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 0; padding: 16px; }
+.cat-item { display: flex; flex-direction: column; align-items: center; gap: 6px; opacity: 0.5; transition: opacity 0.2s; }
+.cat-item.active { opacity: 1; }
+.cat-icon-wrap { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; }
+.cat-name { font-size: 12px; color: var(--text1); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo } = React;
+
+/* ═══ DATA & CONFIG ═══ */
+const CATS=[
+  {id:"eat",name:"餐饮",icon:"🍽️",color:"#FF9500",subs:["工作餐","外卖","买菜","聚餐","咖啡饮品"]},
+  {id:"transport",name:"交通",icon:"🚇",color:"#007AFF",subs:["公交地铁","打车","火车机票","加油停车"]},
+  {id:"shopping",name:"购物",icon:"🛍️",color:"#FF2D55",subs:["衣物鞋包","日用品","数码电子","护肤美妆"]},
+  {id:"housing",name:"居住",icon:"🏠",color:"#5AC8FA",subs:["房租房贷","水电煤","物业维修","家居收纳"]},
+  {id:"fun",name:"娱乐",icon:"🎮",color:"#AF52DE",subs:["电影演出","游戏","运动健身","旅游"]},
+  {id:"health",name:"医疗",icon:"💊",color:"#FF3B30",subs:["药品","门诊","体检","保险"]},
+  {id:"social",name:"人情",icon:"🎁",color:"#FF2D55",subs:["请客送礼","红包","孝敬长辈"]},
+  {id:"other",name:"其他",icon:"📎",color:"#8E8E93",subs:["宠物","订阅","杂项"]}
+];
+const PAYS=[{id:"wechat",name:"微信",icon:"💚"},{id:"alipay",name:"支付宝",icon:"🔵"},{id:"card",name:"银行卡",icon:"💳"},{id:"cash",name:"现金",icon:"💵"}];
+
+const SK="budget-apple-v1";
+const D=()=>({entries:[], sl:[], mb:0, sg:0, initSav:0, ok:false});
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const fmF=n=>Math.abs(n).toLocaleString("zh-CN",{maximumFractionDigits:2});
+const nw=()=>new Date();
+const td=()=>{const d=nw();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`};
+const mo=d=>d.substring(0,7);
+
+const LS={g(k){try{return JSON.parse(localStorage.getItem(k))}catch{return null}},s(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+
+/* ═══ CORE APP ═══ */
+function App(){
+  const [data, sd] = useState(null), [vw, sv] = useState("home"), [ag, sa] = useState(null);
+  useEffect(()=>{ sd(LS.g(SK)||D()); },[]);
+  const save = useCallback(d=>{ sd(d); LS.s(SK,d); },[]);
+  const go = (v,a)=>{ sv(v); sa(a||null); window.scrollTo(0,0); };
+
+  if(!data) return null;
+  if(!data.ok) return <Setup onDone={d=>save({...D(), ...d, ok:true})}/>;
+
+  // Global derived state for Savings to ensure it's always accurate
+  const totalDep = data.sl.filter(x=>x.t==="d").reduce((a,c)=>a+c.a,0);
+  const totalWit = data.sl.filter(x=>x.t==="w").reduce((a,c)=>a+c.a,0);
+  const totalSavSpent = data.entries.filter(x=>x.fromSav).reduce((a,c)=>a+c.amount,0);
+  const currentSav = (data.initSav||0) + totalDep - totalWit - totalSavSpent;
+
+  const P={
+    home:<Home d={data} s={save} go={go}/>,
+    add:<Add d={data} s={save} gb={()=>go("home")}/>,
+    sav:<Sav d={data} s={save} currentSav={currentSav} go={go}/>,
+    hist:<Hist d={data} s={save} go={go}/>,
+    sett:<Sett d={data} s={save} gb={()=>go("home")}/>
+  };
+
+  return <>{P[vw]||P.home}{["home","add","sav"].includes(vw)&&<TabBar c={vw} go={go}/>}</>;
+}
+
+/* ═══ COMPONENTS ═══ */
+function TabBar({c,go}){
+  return <div style={{position:"fixed",bottom:0,left:0,right:0,display:"flex",background:"rgba(242,242,247,0.9)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderTop:"0.5px solid var(--sep)",paddingBottom:"env(safe-area-inset-bottom)",zIndex:100}}>
+    {[["home","概览","📊"],["add","记账","＋"],["sav","储蓄","🎯"]].map(([id,lb,ic])=>
+      <button key={id} onClick={()=>go(id)} style={{flex:1,padding:"10px 0",color:c===id?"var(--blue)":"var(--text2)",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+        <span style={{fontSize:24}}>{ic}</span>
+        <span style={{fontSize:10,fontWeight:500}}>{lb}</span>
+      </button>
+    )}
+  </div>;
+}
+
+function NavBar({t, l, r}){
+  return <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:"var(--bg)",position:"sticky",top:0,zIndex:10}}>
+    <div style={{width:80}}>{l}</div>
+    <div style={{fontSize:17,fontWeight:600}}>{t}</div>
+    <div style={{width:80,textAlign:"right"}}>{r}</div>
+  </div>;
+}
+
+/* ═══ SETUP ═══ */
+function Setup({onDone}){
+  const [b,sb]=useState(""), [sg,ssg]=useState(""), [is, sis]=useState("");
+  return <div style={{padding:"60px 20px"}}>
+    <h1 className="page-title" style={{textAlign:"center",marginBottom:40}}>设置初始参数</h1>
+    <div className="inset-group">
+      <div className="inset-item">
+        <span className="inset-label">每月预算</span>
+        <input className="inset-value num" type="number" placeholder="必填" style={{border:"none",background:"none",textAlign:"right"}} value={b} onChange={e=>sb(e.target.value)}/>
+      </div>
+      <div className="inset-item">
+        <span className="inset-label">每月储蓄目标</span>
+        <input className="inset-value num" type="number" placeholder="选填" style={{border:"none",background:"none",textAlign:"right"}} value={sg} onChange={e=>ssg(e.target.value)}/>
+      </div>
+      <div className="inset-item">
+        <span className="inset-label">历史已有储蓄</span>
+        <input className="inset-value num" type="number" placeholder="选填，初始资金" style={{border:"none",background:"none",textAlign:"right"}} value={is} onChange={e=>sis(e.target.value)}/>
+      </div>
+    </div>
+    <div style={{padding:"0 16px"}}>
+      <button style={{width:"100%",padding:"14px",background:"var(--blue)",color:"#fff",borderRadius:12,fontSize:17,fontWeight:600}} onClick={()=>{if(+b>0) onDone({mb:+b, sg:+sg||0, initSav:+is||0})}}>开始使用</button>
+    </div>
+  </div>;
+}
+
+/* ═══ HOME ═══ */
+function Home({d, go}){
+  const me = d.entries.filter(e=>mo(e.df)===mo(td()) && !e.fromSav);
+  const spent = me.reduce((a,c)=>a+c.amount,0);
+  const rem = d.mb - spent;
+  
+  return <div style={{paddingBottom:90}}>
+    <div style={{padding:"16px 20px 8px", display:"flex", justifyContent:"space-between", alignItems:"baseline"}}>
+      <h1 className="page-title" style={{padding:0}}>本月概览</h1>
+      <button style={{color:"var(--blue)", fontSize:17}} onClick={()=>go("sett")}>设置</button>
+    </div>
+
+    <div className="inset-group" style={{padding:"24px 16px", textAlign:"center"}}>
+      <p style={{fontSize:13, color:"var(--text2)", marginBottom:8}}>本月可用余额</p>
+      <h2 className="num" style={{fontSize:48, fontWeight:700, color:rem>=0?"var(--text1)":"var(--red)", letterSpacing:"-1px"}}>
+        <span style={{fontSize:24}}>¥</span>{fmF(rem)}
+      </h2>
+      <div style={{marginTop:20, height:8, background:"#E5E5EA", borderRadius:4, overflow:"hidden"}}>
+        <div style={{height:"100%", background:rem>=0?"var(--blue)":"var(--red)", width:`${Math.min((spent/d.mb)*100, 100)}%`}}/>
+      </div>
+      <div style={{display:"flex", justifyContent:"space-between", marginTop:8, fontSize:13, color:"var(--text2)"}}>
+        <span>已用 ¥{fmF(spent)}</span>
+        <span>总计 ¥{fmF(d.mb)}</span>
+      </div>
+    </div>
+
+    <div className="section-title">快捷入口</div>
+    <div className="inset-group">
+      <button className="inset-item" style={{width:"100%", textAlign:"left"}} onClick={()=>go("hist")}>
+        <span className="inset-label">📜 历史账单明细</span>
+        <span style={{color:"var(--text3)"}}>›</span>
+      </button>
+    </div>
+  </div>;
+}
+
+/* ═══ ADD RECORD ═══ */
+function Add({d, s, gb}){
+  const [amt, sa]=useState(""), [cat, sc]=useState("eat"), [sub, ss]=useState(""), [pay, sp]=useState("wechat"), [df, sdf]=useState(td()), [fromSav, sfs]=useState(false), [note, sn]=useState("");
+  
+  const submit=()=>{
+    if(!amt||+amt<=0) return;
+    s({...d, entries:[...d.entries, {id:uid(), amount:+amt, cat, sub:sub||"其他", pay, df, note, fromSav}]});
+    gb();
+  };
+
+  const activeCat = CATS.find(c=>c.id===cat);
+
+  return <div style={{paddingBottom:90}}>
+    <NavBar t="记一笔" l={<button style={{color:"var(--blue)",fontSize:17}} onClick={gb}>取消</button>} r={<button style={{color:"var(--blue)",fontSize:17,fontWeight:600}} onClick={submit}>保存</button>}/>
+    
+    <div className="inset-group" style={{padding:"20px 16px", background:"var(--card)"}}>
+      <div style={{display:"flex", alignItems:"center", borderBottom:"2px solid var(--blue)", paddingBottom:8}}>
+        <span style={{fontSize:32, fontWeight:500, marginRight:8}}>¥</span>
+        <input className="num" type="number" style={{flex:1, fontSize:36, fontWeight:700, border:"none", background:"none", padding:0}} placeholder="0.00" value={amt} onChange={e=>sa(e.target.value)} autoFocus/>
+      </div>
+    </div>
+
+    <div className="section-title">一级分类</div>
+    <div className="inset-group cat-grid">
+      {CATS.map(c=><div key={c.id} className={`cat-item ${cat===c.id?"active":""}`} onClick={()=>{sc(c.id); ss("");}}>
+        <div className="cat-icon-wrap" style={{background:cat===c.id?c.color:"#E5E5EA"}}>{c.icon}</div>
+        <span className="cat-name" style={{fontWeight:cat===c.id?600:400}}>{c.name}</span>
+      </div>)}
+    </div>
+
+    {activeCat && <>
+      <div className="section-title">二级标签</div>
+      <div className="inset-group" style={{padding:"12px 16px", display:"flex", flexWrap:"wrap", gap:10}}>
+        {activeCat.subs.map(x=><button key={x} onClick={()=>ss(sub===x?"":x)} style={{padding:"6px 14px", borderRadius:16, background:sub===x?"var(--blue)":"#E5E5EA", color:sub===x?"#fff":"var(--text1)", fontSize:14}}>{x}</button>)}
+      </div>
+    </>}
+
+    <div className="section-title">更多信息</div>
+    <div className="inset-group">
+      <div className="inset-item">
+        <span className="inset-label">日期</span>
+        <input type="date" className="inset-value" style={{border:"none", background:"none", fontFamily:"inherit"}} value={df} onChange={e=>sdf(e.target.value)}/>
+      </div>
+      <div className="inset-item">
+        <span className="inset-label">支付方式</span>
+        <select className="inset-value" style={{border:"none", background:"none", direction:"rtl", fontSize:17}} value={pay} onChange={e=>sp(e.target.value)}>
+          {PAYS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </div>
+      <div className="inset-item">
+        <span className="inset-label">从储蓄扣除</span>
+        <input type="checkbox" checked={fromSav} onChange={e=>sfs(e.target.checked)} style={{width:20, height:20}}/>
+      </div>
+      <div className="inset-item">
+        <input type="text" placeholder="添加备注..." style={{width:"100%", border:"none", background:"none", fontSize:17}} value={note} onChange={e=>sn(e.target.value)}/>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ═══ SAVINGS ═══ */
+function Sav({d, s, currentSav}){
+  const [amt, sa] = useState(""), [note, sn] = useState("");
+  const m = mo(td());
+  
+  // This month data
+  const md = d.sl.filter(x=>mo(x.date)===m && x.t==="d").reduce((a,c)=>a+c.a,0);
+  const mw = d.sl.filter(x=>mo(x.date)===m && x.t==="w").reduce((a,c)=>a+c.a,0);
+  const mSpent = d.entries.filter(x=>mo(x.df)===m && x.fromSav).reduce((a,c)=>a+c.amount,0);
+  
+  const pct = d.sg > 0 ? Math.min((md / d.sg) * 100, 100) : 0;
+  const dash = 251.2; // 2 * pi * 40
+
+  const act = (t) => {
+    if(!amt||+amt<=0) return;
+    if(t==="w" && +amt>currentSav) return alert("储蓄余额不足");
+    s({...d, sl:[...d.sl, {id:uid(), t, a:+amt, date:td(), note}]});
+    sa(""); sn("");
+  };
+
+  return <div style={{paddingBottom:90}}>
+    <h1 className="page-title">储蓄金</h1>
+    
+    <div className="inset-group" style={{padding:"24px 16px", textAlign:"center", background:"#000", color:"#fff"}}>
+      <p style={{fontSize:13, color:"rgba(255,255,255,0.6)"}}>总储蓄余额</p>
+      <h2 className="num" style={{fontSize:42, fontWeight:700, margin:"8px 0"}}><span style={{fontSize:20}}>¥</span>{fmF(currentSav)}</h2>
+      <p style={{fontSize:12, color:"rgba(255,255,255,0.4)"}}>包含初始资金 ¥{fmF(d.initSav||0)}</p>
+    </div>
+
+    {d.sg > 0 && <>
+      <div className="section-title">本月目标</div>
+      <div className="inset-group" style={{padding:"16px", display:"flex", alignItems:"center", gap:20}}>
+        <div className="ring-wrap">
+          <svg width="80" height="80" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" className="ring-circle ring-bg"/>
+            <circle cx="50" cy="50" r="40" className="ring-circle ring-fg" style={{strokeDasharray:dash, strokeDashoffset:dash - (dash * pct / 100)}}/>
+          </svg>
+          <div className="ring-text num" style={{color:pct>=100?"var(--green)":"var(--text1)"}}>{Math.round(pct)}%</div>
+        </div>
+        <div style={{flex:1}}>
+          <p style={{fontSize:15, fontWeight:600}}>已存入 ¥{fmF(md)}</p>
+          <p style={{fontSize:13, color:"var(--text2)", marginTop:4}}>目标 ¥{fmF(d.sg)}</p>
+          {pct>=100 && <span style={{display:"inline-block", marginTop:6, padding:"2px 8px", background:"rgba(52,199,89,0.1)", color:"var(--green)", fontSize:12, borderRadius:4}}>🎉 目标达成</span>}
+        </div>
+      </div>
+    </>}
+
+    <div className="section-title">本月储蓄动态</div>
+    <div className="inset-group">
+      <div className="inset-item"><span className="inset-label">当月存入</span><span className="inset-value num" style={{color:"var(--green)"}}>+{fmF(md)}</span></div>
+      <div className="inset-item"><span className="inset-label">当月手动取出</span><span className="inset-value num" style={{color:"var(--orange)"}}>-{fmF(mw)}</span></div>
+      <div className="inset-item">
+        <span className="inset-label">当月消费扣除</span>
+        <div style={{textAlign:"right"}}>
+          <div className="num" style={{color:"var(--red)", fontSize:17}}>-{fmF(mSpent)}</div>
+          {mSpent > md && <div style={{fontSize:11, color:"var(--orange)", marginTop:2}}>已动用历史老本</div>}
+        </div>
+      </div>
+    </div>
+
+    <div className="section-title">存取操作</div>
+    <div className="inset-group" style={{padding:"16px"}}>
+      <input className="num" type="number" placeholder="输入金额" style={{width:"100%", padding:"12px", background:"#E5E5EA", borderRadius:8, border:"none", fontSize:17, marginBottom:12}} value={amt} onChange={e=>sa(e.target.value)}/>
+      <input type="text" placeholder="备注 (可选)" style={{width:"100%", padding:"12px", background:"#E5E5EA", borderRadius:8, border:"none", fontSize:17, marginBottom:16}} value={note} onChange={e=>sn(e.target.value)}/>
+      <div style={{display:"flex", gap:12}}>
+        <button style={{flex:1, padding:"12px", background:"var(--green)", color:"#fff", borderRadius:8, fontSize:15, fontWeight:600}} onClick={()=>act("d")}>存入金库</button>
+        <button style={{flex:1, padding:"12px", background:"rgba(255,59,48,0.1)", color:"var(--red)", borderRadius:8, fontSize:15, fontWeight:600}} onClick={()=>act("w")}>从金库取出</button>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ═══ HISTORY ═══ */
+function Hist({d, go}){
+  const [tab, setTab] = useState("exp"); // exp or sav
+
+  // Group Expenses
+  const expSorted = [...d.entries].sort((a,b)=>b.df>a.df?1:-1);
+  const expByMo = {};
+  expSorted.forEach(e=>{const m=mo(e.df); if(!expByMo[m])expByMo[m]=[]; expByMo[m].push(e);});
+
+  // Group Savings
+  const savSorted = [...d.sl].sort((a,b)=>b.date>a.date?1:-1);
+  const savByMo = {};
+  savSorted.forEach(e=>{const m=mo(e.date); if(!savByMo[m])savByMo[m]=[]; savByMo[m].push(e);});
+
+  return <div>
+    <NavBar t="历史记录" l={<button style={{color:"var(--blue)",fontSize:17}} onClick={()=>go("home")}>返回</button>} r={null}/>
+    
+    <div className="segmented">
+      <button className={`seg-btn ${tab==="exp"?"active":""}`} onClick={()=>setTab("exp")}>消费账单</button>
+      <button className={`seg-btn ${tab==="sav"?"active":""}`} onClick={()=>setTab("sav")}>储蓄流水</button>
+    </div>
+
+    {tab === "exp" && Object.entries(expByMo).map(([m, es])=><div key={m}>
+      <div className="section-title" style={{position:"sticky", top:50, background:"var(--bg)", paddingTop:10, zIndex:5}}>{m} · 总支出 ¥{fmF(es.reduce((a,c)=>a+c.amount,0))}</div>
+      <div className="inset-group">
+        {es.map(e=>{
+          const c = CATS.find(x=>x.id===e.cat)||CATS[7];
+          return <div key={e.id} className="inset-item" style={{alignItems:"flex-start"}}>
+            <span style={{fontSize:24, marginRight:12}}>{c.icon}</span>
+            <div style={{flex:1}}>
+              <p style={{fontSize:17, fontWeight:500}}>{c.name} {e.sub&&<span style={{color:"var(--text2)",fontWeight:400,fontSize:15}}>- {e.sub}</span>}</p>
+              <p style={{fontSize:13, color:"var(--text2)", marginTop:2}}>{e.df} {e.note&&`· ${e.note}`} {e.fromSav&&"💰"}</p>
+            </div>
+            <span className="num" style={{fontSize:17, fontWeight:600}}>¥{fmF(e.amount)}</span>
+          </div>;
+        })}
+      </div>
+    </div>)}
+
+    {tab === "sav" && Object.entries(savByMo).map(([m, es])=><div key={m}>
+      <div className="section-title" style={{position:"sticky", top:50, background:"var(--bg)", paddingTop:10, zIndex:5}}>{m}</div>
+      <div className="inset-group">
+        {es.map(e=><div key={e.id} className="inset-item">
+          <div>
+            <p style={{fontSize:17, fontWeight:500}}>{e.t==="d"?"存入":"取出"}</p>
+            <p style={{fontSize:13, color:"var(--text2)", marginTop:2}}>{e.date} {e.note&&`· ${e.note}`}</p>
+          </div>
+          <span className="num" style={{fontSize:17, fontWeight:600, color:e.t==="d"?"var(--green)":"var(--red)"}}>{e.t==="d"?"+":"-"}¥{fmF(e.a)}</span>
+        </div>)}
+      </div>
+    </div>)}
+    
+    {((tab==="exp"&&!expSorted.length) || (tab==="sav"&&!savSorted.length)) && <p style={{textAlign:"center", color:"var(--text3)", marginTop:40}}>暂无记录</p>}
+  </div>;
+}
+
+/* ═══ SETTINGS ═══ */
+function Sett({d, s, gb}){
+  const [b,sb]=useState(String(d.mb)), [sg,ssg]=useState(String(d.sg||0)), [is,sis]=useState(String(d.initSav||0));
+  
+  return <div style={{paddingBottom:40}}>
+    <NavBar t="设置" l={<button style={{color:"var(--blue)",fontSize:17}} onClick={gb}>取消</button>} r={<button style={{color:"var(--blue)",fontSize:17,fontWeight:600}} onClick={()=>{s({...d,mb:+b,sg:+sg,initSav:+is});gb();}}>保存</button>}/>
+    
+    <div className="section-title" style={{marginTop:20}}>核心参数</div>
+    <div className="inset-group">
+      <div className="inset-item">
+        <span className="inset-label">每月总预算</span>
+        <input className="inset-value num" type="number" value={b} onChange={e=>sb(e.target.value)} style={{border:"none",background:"none",textAlign:"right"}}/>
+      </div>
+      <div className="inset-item">
+        <span className="inset-label">每月储蓄目标</span>
+        <input className="inset-value num" type="number" value={sg} onChange={e=>ssg(e.target.value)} style={{border:"none",background:"none",textAlign:"right"}}/>
+      </div>
+      <div className="inset-item">
+        <span className="inset-label">历史初始储蓄金</span>
+        <input className="inset-value num" type="number" value={is} onChange={e=>sis(e.target.value)} style={{border:"none",background:"none",textAlign:"right"}}/>
+      </div>
+    </div>
+
+    <div className="section-title">数据管理</div>
+    <div className="inset-group">
+      <button className="inset-item" style={{width:"100%", textAlign:"left", color:"var(--red)"}} onClick={()=>{if(confirm("确定要清空所有数据吗？")) {s(D());gb();}}}>
+        <span className="inset-label">清空所有数据</span>
+      </button>
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
