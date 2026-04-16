@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>轻记账 v8</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+
+<style>
+body{margin:0;font-family:-apple-system;background:#f2f2f7}
+.card{background:#fff;border-radius:14px;padding:12px;margin:10px}
+.btn{padding:12px;border-radius:12px;border:none}
+.blue{background:#007aff;color:#fff}
+.gray{background:#eee}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.pill{padding:6px 10px;border-radius:999px;background:#eee;border:none}
+.num{font-variant-numeric:tabular-nums}
+</style>
+</head>
+
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+
+const {useState,useEffect} = React;
+const LS_KEY="budget_v8";
+
+/* ======================
+   分类结构（分层）
+====================== */
+const CATS = [
+  {id:"food",name:"餐饮",subs:["外食","咖啡","外卖"]},
+  {id:"home",name:"居家",subs:["房租","水电","日用品"]},
+  {id:"transport",name:"交通",subs:["地铁","打车","油费"]},
+  {id:"shopping",name:"购物",subs:["衣服","数码","其他"]},
+  {id:"fun",name:"娱乐",subs:["电影","游戏","健身"]},
+];
+
+/* ======================
+   初始化结构
+====================== */
+const initData = ()=>({
+  mb:8000,
+  sg:1000,
+
+  sp:0,
+  spHist:0,       // ⭐历史储蓄初始化
+  spMonthIn:0,
+  spMonthOut:0,
+
+  entries:[],
+  sl:[],
+  ok:true
+});
+
+/* ======================
+   localStorage
+====================== */
+const LS={
+  get:()=>JSON.parse(localStorage.getItem(LS_KEY)||"null"),
+  set:(v)=>localStorage.setItem(LS_KEY,JSON.stringify(v))
+};
+
+/* ======================
+   储蓄扣款逻辑（核心升级）
+====================== */
+function spendSaving(d,amt){
+  let left=amt;
+
+  let m=d.spMonthIn;
+  let h=d.spHist;
+
+  let useM=Math.min(m,left);
+  left-=useM;
+
+  let useH=Math.min(h,left);
+  left-=useH;
+
+  return{
+    spMonthIn:m-useM,
+    spHist:h-useH,
+    useM,useH
+  };
+}
+
+/* ======================
+   App
+====================== */
+function App(){
+  const [d,setD]=useState(null);
+  const [tab,setTab]=useState("home");
+
+  useEffect(()=>{
+    setD(LS.get()||initData());
+  },[]);
+
+  if(!d) return <div>loading...</div>;
+
+  const save=(nd)=>{setD(nd);LS.set(nd)};
+
+  return(
+    <div style={{paddingBottom:80}}>
+
+      {tab==="home" && <Home d={d} setD={save} />}
+      {tab==="add" && <Add d={d} setD={save} />}
+      {tab==="sav" && <Saving d={d} setD={save} />}
+
+      {/* tab */}
+      <div style={{position:"fixed",bottom:0,left:0,right:0,display:"flex"}}>
+        {["home","add","sav"].map(t=>
+          <button key={t} className="btn" style={{flex:1}} onClick={()=>setTab(t)}>
+            {t}
+          </button>
+        )}
+      </div>
+
+    </div>
+  );
+}
+
+/* ======================
+   首页
+====================== */
+function Home({d}){
+  const spent=d.entries.reduce((a,e)=>a+e.amount,0);
+  const rem=d.mb-spent;
+
+  const md=d.spMonthIn;
+  const sg=d.sg;
+
+  return(
+    <div className="card">
+      <h2>本月余额</h2>
+      <h1 className="num">¥{rem}</h1>
+
+      <h3>储蓄目标</h3>
+      <div className="num">{md} / {sg}</div>
+      <progress value={md} max={sg}></progress>
+
+      <h3>储蓄池</h3>
+      <div className="num">总：¥{d.spHist + d.spMonthIn}</div>
+    </div>
+  );
+}
+
+/* ======================
+   记账
+====================== */
+function Add({d,setD}){
+  const [amt,setAmt]=useState("");
+  const [cat,setCat]=useState("");
+  const [sub,setSub]=useState("");
+  const [fromSav,setFS]=useState(false);
+
+  const add=()=>{
+    let nd={...d};
+
+    if(fromSav){
+      const r=spendSaving(nd,+amt);
+      nd.spMonthIn=r.spMonthIn;
+      nd.spHist=r.spHist;
+    }
+
+    nd.entries.push({
+      id:Date.now(),
+      amount:+amt,
+      cat,
+      sub
+    });
+
+    setD(nd);
+  };
+
+  return(
+    <div className="card">
+
+      <input placeholder="金额" value={amt} onChange={e=>setAmt(e.target.value)}/>
+
+      <div className="row">
+        {CATS.map(c=>
+          <button key={c.id} className="pill" onClick={()=>setCat(c.id)}>
+            {c.name}
+          </button>
+        )}
+      </div>
+
+      {cat &&
+        <div className="row">
+          {CATS.find(c=>c.id===cat).subs.map(s=>
+            <button className="pill" onClick={()=>setSub(s)}>{s}</button>
+          )}
+        </div>
+      }
+
+      <label>
+        <input type="checkbox" checked={fromSav} onChange={e=>setFS(e.target.checked)} />
+        从储蓄扣
+      </label>
+
+      <button className="btn blue" onClick={add}>添加</button>
+
+    </div>
+  );
+}
+
+/* ======================
+   储蓄
+====================== */
+function Saving({d,setD}){
+
+  const [amt,setAmt]=useState("");
+
+  const deposit=()=>{
+    setD({
+      ...d,
+      spHist:d.spHist+ +amt,
+      spMonthIn:d.spMonthIn+ +amt,
+    });
+  };
+
+  const withdraw=()=>{
+    setD({
+      ...d,
+      spHist:d.spHist- +amt
+    });
+  };
+
+  return(
+    <div className="card">
+
+      <h2>储蓄池</h2>
+      <h1 className="num">¥{d.spHist + d.spMonthIn}</h1>
+
+      <input value={amt} onChange={e=>setAmt(e.target.value)} />
+
+      <div className="row">
+        <button className="btn blue" onClick={deposit}>存入</button>
+        <button className="btn" onClick={withdraw}>取出</button>
+      </div>
+
+      <hr/>
+
+      <div>
+        <div>本月存入：{d.spMonthIn}</div>
+        <div>历史储蓄：{d.spHist}</div>
+      </div>
+
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+
+</script>
+</body>
+</html>
