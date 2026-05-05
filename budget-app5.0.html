@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f2f2f7">
+<title>轻记账</title>
+<style>
+:root{
+  --fz:-apple-system,'PingFang SC','SF Pro SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC',sans-serif;
+  --fn:'SF Pro Display',-apple-system,'PingFang SC','Helvetica Neue',sans-serif;
+  --fs:-apple-system,BlinkMacSystemFont,'SF Pro Text','PingFang SC','SF Pro SC','Hiragino Sans GB','Noto Sans CJK SC',sans-serif;
+  --bg:#f2f2f7;
+  --card:rgba(255,255,255,.82);
+  --card-solid:#fff;
+  --fill:rgba(118,118,128,.12);
+  --fill2:rgba(118,118,128,.06);
+  --lb:#000;--lb2:rgba(60,60,67,.6);--lb3:rgba(60,60,67,.3);
+  --sep:rgba(60,60,67,.13);
+  --blue:#007aff;--green:#34c759;--red:#ff3b30;--orange:#ff9500;
+  --purple:#af52de;--pink:#ff2d55;--teal:#5ac8fa;--indigo:#5856d6;
+  --glass:rgba(255,255,255,.72);
+  --glass-border:rgba(255,255,255,.45);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{height:100%;-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--fs);background:var(--bg);color:var(--lb);
+  -webkit-font-smoothing:antialiased;min-height:100%;overflow-x:hidden;
+  padding-top:env(safe-area-inset-top);
+  font-feature-settings:'palt','kern';
+  text-rendering:optimizeLegibility;
+}
+#root{min-height:100vh;padding-bottom:100px}
+.n{font-family:var(--fn);font-feature-settings:'tnum','lnum'}
+.z{font-family:var(--fz)}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
+input[type=number]{-moz-appearance:textfield;font-family:var(--fn)}
+input:focus{outline:none}
+button{-webkit-appearance:none;font-family:var(--fs);cursor:pointer;border:none;background:none}
+input[type=date]{font-family:var(--fs);color:var(--lb);min-height:36px}
+::selection{background:var(--blue);color:#fff}
+
+/* ═══ Liquid Glass ═══ */
+.glass{
+  background:var(--glass);
+  backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border:0.5px solid var(--glass-border);
+  border-radius:16px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.03),inset 0 1px 0 rgba(255,255,255,.6);
+  position:relative;overflow:hidden;
+}
+.glass::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:50%;
+  background:linear-gradient(180deg,rgba(255,255,255,.35) 0%,rgba(255,255,255,0) 100%);
+  pointer-events:none;border-radius:inherit;
+}
+.glass-s{
+  background:rgba(255,255,255,.65);
+  backdrop-filter:saturate(120%) blur(12px);
+  -webkit-backdrop-filter:saturate(120%) blur(12px);
+  border:0.5px solid rgba(255,255,255,.35);
+  border-radius:14px;
+  box-shadow:0 1px 3px rgba(0,0,0,.03),inset 0 0.5px 0 rgba(255,255,255,.5);
+}
+.trk{height:6px;border-radius:3px;background:var(--fill);overflow:hidden}
+.trk>div{height:100%;border-radius:3px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+.tap:active{opacity:.55;transition:opacity .08s}
+.sbar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--fill)}
+.sbar>div{height:100%;transition:width .4s ease}
+
+/* iOS toggle */
+.toggle{width:51px;height:31px;border-radius:16px;background:#e9e9ea;position:relative;transition:background .3s;cursor:pointer;flex-shrink:0}
+.toggle.on{background:var(--green)}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:14px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.15);transition:transform .3s cubic-bezier(.4,.8,.4,1)}
+.toggle.on::after{transform:translateX(20px)}
+
+/* Category grid */
+.cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:4px}
+.cat-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:12px;transition:all .15s}
+.cat-item.on{background:var(--fill)}
+
+/* Bottom tabs */
+.btabs{
+  position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:center;
+  padding:6px 0 calc(env(safe-area-inset-bottom,8px) + 6px);
+  background:rgba(249,249,249,.88);
+  backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-top:0.5px solid rgba(0,0,0,.1);z-index:50;
+}
+.btab{display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 32px;min-width:72px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useEffect,useCallback,useRef}=React;
+
+/* ═══════════ CONFIG ═══════════ */
+const CATS=[
+  {id:"work_meal",name:"工作餐",color:"#E8913A",subs:["早午餐","下午茶","咖啡","其他"],pct:.14,avg:"wd",
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>'},
+  {id:"eat_out",name:"外出就餐",color:"#F97316",subs:["聚餐","外卖","小吃","其他"],pct:.08,
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2l3 18h12l3-18"/><path d="M6 8h12"/></svg>'},
+  {id:"home_eat",name:"在家吃饭",color:"#84CC16",subs:["食材","零食","饮品","其他"],pct:.10,
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>'},
+  {id:"transport",name:"交通",color:"#5B8DEF",subs:["公交地铁","打车","加油","停车","机票","高铁","其他"],pct:.08,
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M3 10h18"/><circle cx="7.5" cy="21" r="1.5"/><circle cx="16.5" cy="21" r="1.5"/><path d="M5.5 17l-2 4M18.5 17l2 4"/></svg>'},
+  {id:"shopping",name:"购物",color:"#E05A8D",subs:["衣物","数码","美妆","其他"],pct:.10,
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>'},
+  {id:"family",name:"家庭",color:"#34D399",subs:["日用品","清洁","母婴","宠物","其他"],pct:.12,
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>'},
+  {id:"housing",name:"居住",color:"#10B981",subs:["房租","水电","物业","维修","其他"],pct:.25,
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V4a1 1 0 00-1-1H9a1 1 0 00-1 1v3"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>'},
+  {id:"fun",name:"娱乐",color:"#A855F7",subs:["电影","游戏","聚会","运动","其他"],pct:.06,
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>'},
+  {id:"health",name:"医疗",color:"#06B6D4",subs:["门诊","药品","体检","保险","其他"],pct:.04,
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>'},
+  {id:"other",name:"其他",color:"#6B7280",subs:["人情","礼物","其他"],pct:.03,
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>'},
+];
+const PAYS=[
+  {id:"wechat",name:"微信"},{id:"alipay",name:"支付宝"},{id:"credit",name:"信用卡"},
+  {id:"debit",name:"储蓄卡"},{id:"cash",name:"现金"},
+];
+const SK="budget-v11";
+const D=()=>({entries:[],catBudgets:{},monthlyBudget:0,savingsPool:0,monthlySavingsGoal:0,savingsLog:[],projects:[],transfers:[],setup:false,initSavings:0});
+const fmt=n=>Math.abs(n).toLocaleString("zh-CN",{maximumFractionDigits:0});
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const moOf=d=>{const x=new Date(d);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}`};
+const curMo=()=>moOf(new Date());
+const daysInMonth=(y,m)=>new Date(y,m,0).getDate();
+const parseMo=mk=>{const[y,m]=mk.split("-").map(Number);return{y,m}};
+const moLabel=mk=>{const{y,m}=parseMo(mk);return`${y}年${m}月`};
+
+/* ═══ Helpers ═══ */
+function getMonthEntries(entries,mo){return entries.filter(e=>moOf(e.date)===mo&&!e.projectId)}
+function getMonthSavingsLog(log,mo){return log.filter(l=>moOf(l.date)===mo)}
+function getMonthTransfers(transfers,mo){return(transfers||[]).filter(t=>moOf(t.date)===mo)}
+function calcMonthSpent(entries,mo){return getMonthEntries(entries,mo).filter(e=>!e.fromSavings).reduce((s,e)=>s+e.amount,0)}
+function calcMonthSavingsSpent(entries,mo){return getMonthEntries(entries,mo).filter(e=>e.fromSavings).reduce((s,e)=>s+e.amount,0)}
+function calcTransferIn(transfers,mo){return getMonthTransfers(transfers,mo).reduce((s,t)=>s+t.amount,0)}
+function calcSavingsPoolBalance(data){
+  let bal=data.initSavings||0;
+  (data.savingsLog||[]).forEach(l=>{if(l.type==="deposit")bal+=l.amount;else bal-=l.amount});
+  (data.entries||[]).forEach(e=>{if(e.fromSavings)bal-=e.amount});
+  (data.transfers||[]).forEach(t=>{bal-=t.amount});
+  return bal;
+}
+function prevMo(mk){const{y,m}=parseMo(mk);return m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,"0")}`}
+function nextMo(mk){const{y,m}=parseMo(mk);return m===12?`${y+1}-01`:`${y}-${String(m+1).padStart(2,"0")}`}
+function getWorkdaysInRange(start,end){let c=0;const d=new Date(start);const e=new Date(end);while(d<=e){const day=d.getDay();if(day!==0&&day!==6)c++;d.setDate(d.getDate()+1)}return c||1}
+
+const LS={get(k){try{return JSON.parse(localStorage.getItem(k))}catch{return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+
+/* ═══ Icons ═══ */
+const TabIcon=({name,active})=>{
+  const c=active?"var(--blue)":"var(--lb3)";
+  const icons={
+    home:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+    add:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>,
+    savings:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+  };
+  return icons[name]||null;
+};
+
+const CatIcon=({cat,size=32})=>(
+  <div style={{width:size,height:size,borderRadius:8,background:cat.color+"20",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{width:size*.55,height:size*.55,color:cat.color}} dangerouslySetInnerHTML={{__html:cat.icon}}/>
+  </div>
+);
+
+/* ═══════════ APP ═══════════ */
+function App(){
+  const[data,setData]=useState(null);
+  const[view,setView]=useState("home");
+  const[arg,setArg]=useState(null);
+  const[ld,setLd]=useState(true);
+  useEffect(()=>{setData(LS.get(SK)||D());setLd(false)},[]);
+  const save=useCallback(d=>{setData(d);LS.set(SK,d)},[]);
+  const go=(v,a)=>{setView(v);setArg(a||null);window.scrollTo(0,0)};
+  if(ld)return<div style={{textAlign:"center",color:"var(--lb3)",paddingTop:120}}>加载中...</div>;
+  if(!data)return null;
+  if(!data.setup)return<Setup onDone={d=>save({...D(),...d,setup:true})}/>;
+
+  const pages={
+    home:<Home d={data} s={save} go={go}/>,
+    add:<Add d={data} s={save} gb={()=>go("home")} pid={arg}/>,
+    recon:<Recon d={data} s={save} go={go}/>,
+    history:<Hist d={data} s={save} go={go}/>,
+    settings:<Sett d={data} s={save} gb={()=>go("home")}/>,
+    savings:<Savings d={data} s={save} go={go}/>,
+    project:<ProjD d={data} s={save} go={go} pid={arg}/>,
+    projects:<ProjL d={data} s={save} go={go}/>,
+    payment:<PayB d={data} gb={()=>go("home")}/>,
+    transfer:<Transfer d={data} s={save} gb={()=>go("home")}/>,
+    savflow:<SavFlow d={data} s={save} go={go}/>,
+    histMonth:<HistMonth d={data} s={save} go={go} initMo={arg}/>,
+  };
+  const hideTabs=["settings","project","projects","payment","history","recon","transfer","savflow","histMonth"];
+  return(<div>
+    {pages[view]||pages.home}
+    {!hideTabs.includes(view)&&<BT cur={view} go={go}/>}
+  </div>);
+}
+
+/* ═══ Bottom Tabs ═══ */
+function BT({cur,go}){
+  const ts=[{id:"home",label:"首页"},{id:"add",label:"记账"},{id:"savings",label:"储蓄"}];
+  return(<div className="btabs">
+    {ts.map(t=><button key={t.id} className="btab tap" onClick={()=>go(t.id)}
+      style={{color:cur===t.id?"var(--blue)":"var(--lb3)",fontSize:10,fontFamily:"var(--fz)"}}>
+      <TabIcon name={t.id} active={cur===t.id}/>
+      <span>{t.label}</span>
+    </button>)}
+  </div>);
+}
+
+/* ═══ SETUP ═══ */
+function Setup({onDone}){
+  const[step,setStep]=useState(0);
+  const[budget,setBudget]=useState("");
+  const[savGoal,setSavGoal]=useState("");
+  const[initSav,setInitSav]=useState("");
+  const[catBudgets,setCatBudgets]=useState({});
+
+  if(step===0)return(
+    <div style={S.setupWrap}>
+      <div style={{fontSize:40,marginBottom:4,fontFamily:"var(--fn)",fontWeight:700,letterSpacing:"-0.5px"}}>轻记账</div>
+      <p style={{color:"var(--lb2)",fontSize:15,marginBottom:32}}>三步设置，随时可改</p>
+      <label style={S.label}>每月总预算</label>
+      <input style={S.input} type="number" placeholder="例如 8000" value={budget} onChange={e=>setBudget(e.target.value)}/>
+      <label style={{...S.label,marginTop:16}}>每月储蓄目标</label>
+      <input style={S.input} type="number" placeholder="例如 2000（可选）" value={savGoal} onChange={e=>setSavGoal(e.target.value)}/>
+      <label style={{...S.label,marginTop:16}}>现有储蓄余额</label>
+      <input style={S.input} type="number" placeholder="之前积累的储蓄（可选）" value={initSav} onChange={e=>setInitSav(e.target.value)}/>
+      <button style={{...S.btn,...S.btnP,marginTop:24,width:"100%"}} onClick={()=>+budget>0&&setStep(1)}>下一步</button>
+    </div>
+  );
+
+  if(step===1){
+    const b=+budget;
+    const recs={};CATS.forEach(c=>{recs[c.id]=Math.round(b*c.pct)});
+    if(!Object.keys(catBudgets).length)setCatBudgets(recs);
+    return(
+      <div style={S.setupWrap}>
+        <div style={{fontSize:17,fontWeight:600,marginBottom:4}}>分类预算</div>
+        <p style={{color:"var(--lb2)",fontSize:13,marginBottom:16}}>根据总预算 ¥{fmt(b)} 智能推荐</p>
+        {CATS.map(c=>{const v=catBudgets[c.id]||recs[c.id]||0;const pct=b>0?((v/b)*100).toFixed(0):0;return(
+          <div key={c.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+            <CatIcon cat={c} size={28}/>
+            <span style={{flex:1,fontSize:14}}>{c.name}</span>
+            <span style={{fontSize:12,color:"var(--lb3)",width:36,textAlign:"right"}}>{pct}%</span>
+            <input style={{...S.input,width:90,textAlign:"right",margin:0,padding:"6px 8px"}} type="number" value={v||""} onChange={e=>{setCatBudgets({...catBudgets,[c.id]:+e.target.value||0})}}/>
+          </div>
+        )})}
+        <div style={{display:"flex",gap:8,marginTop:20}}>
+          <button style={{...S.btn,flex:1}} onClick={()=>setStep(0)}>上一步</button>
+          <button style={{...S.btn,...S.btnP,flex:2}} onClick={()=>onDone({monthlyBudget:b,monthlySavingsGoal:+savGoal||0,catBudgets,initSavings:+initSav||0})}>开始使用</button>
+        </div>
+      </div>
+    );
+  }
+}
+
+/* ═══ HOME ═══ */
+function Home({d,s,go}){
+  const mo=curMo();
+  const{y,m}=parseMo(mo);
+  const me=getMonthEntries(d.entries,mo);
+  const spent=me.filter(e=>!e.fromSavings).reduce((s,e)=>s+e.amount,0);
+  const savSpent=me.filter(e=>e.fromSavings).reduce((s,e)=>s+e.amount,0);
+  const transferIn=calcTransferIn(d.transfers,mo);
+  const effectiveBudget=d.monthlyBudget+transferIn;
+  const remaining=effectiveBudget-spent;
+  const daysPassed=new Date().getDate();
+  const totalDays=daysInMonth(y,m);
+  const daysLeft=totalDays-daysPassed;
+  const daily=daysLeft>0?Math.max(0,remaining/daysLeft):0;
+  const pct=effectiveBudget>0?Math.min((spent/effectiveBudget)*100,100):0;
+  const timePct=(daysPassed/totalDays)*100;
+  const isOver=remaining<0;
+  const poolBal=calcSavingsPoolBalance(d);
+
+  // category spending
+  const catSpend={};me.filter(e=>!e.fromSavings).forEach(e=>{catSpend[e.catId]=(catSpend[e.catId]||0)+e.amount});
+  const sortedCats=CATS.filter(c=>catSpend[c.id]>0).sort((a,b)=>(catSpend[b.id]||0)-(catSpend[a.id]||0));
+
+  // last entry date
+  const lastEntry=d.entries.filter(e=>!e.projectId).sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+  const lastDate=lastEntry?new Date(lastEntry.dateTo||lastEntry.date):null;
+  const unrecDays=lastDate?Math.max(0,Math.floor((new Date()-lastDate)/(86400000))-1):null;
+
+  return(<div style={S.page}>
+    {/* Header */}
+    <div style={{padding:"12px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+      <div>
+        <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)"}}>{y}年</div>
+        <div style={{fontSize:34,fontWeight:700,fontFamily:"var(--fz)",letterSpacing:"-0.5px",lineHeight:1.1}}>{m}月</div>
+      </div>
+      <div style={{display:"flex",gap:12,paddingTop:8}}>
+        <button className="tap" onClick={()=>go("histMonth",prevMo(mo))} style={{fontSize:20,color:"var(--lb2)"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </button>
+        <button className="tap" onClick={()=>go("settings")} style={{fontSize:20,color:"var(--lb2)"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        </button>
+      </div>
+    </div>
+
+    {/* Budget Card */}
+    <div className="glass" style={{margin:"16px 16px 0",padding:"24px 20px"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",marginBottom:8}}>本月还可以花</div>
+        <div className="n" style={{fontSize:48,fontWeight:700,letterSpacing:"-1px",color:isOver?"var(--red)":"var(--lb)",lineHeight:1}}>
+          <span style={{fontSize:20,fontWeight:400,verticalAlign:"top",marginRight:2}}>¥</span>
+          {isOver?"-":""}{fmt(Math.abs(remaining))}
+        </div>
+        {transferIn>0&&<div style={{fontSize:12,color:"var(--blue)",marginTop:6,fontFamily:"var(--fz)"}}>含储蓄转入 ¥{fmt(transferIn)}</div>}
+      </div>
+      {/* Progress bar */}
+      <div style={{marginTop:16,position:"relative"}}>
+        <div className="trk">
+          <div style={{width:pct+"%",background:isOver?"var(--red)":pct>80?"var(--orange)":"var(--green)"}}/>
+        </div>
+        <div style={{position:"absolute",top:-2,left:timePct+"%",width:2,height:10,background:"var(--lb)",borderRadius:1,opacity:.3}}/>
+      </div>
+      <div style={{fontSize:12,color:"var(--lb3)",marginTop:6,textAlign:"center",fontFamily:"var(--fz)"}}>
+        {isOver?"超支":"节奏健康"} · 已花 ¥{fmt(spent)} / ¥{fmt(effectiveBudget)}
+      </div>
+    </div>
+
+    {/* Daily + Recon */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,margin:"10px 16px 0"}}>
+      <div className="glass" style={{padding:"16px"}}>
+        <div style={{fontSize:12,color:"var(--lb2)",fontFamily:"var(--fz)"}}>日均可花</div>
+        <div className="n" style={{fontSize:32,fontWeight:600,letterSpacing:"-0.5px",marginTop:4}}>
+          <span style={{fontSize:14,fontWeight:400}}>¥</span>{fmt(daily)}
+        </div>
+        <div style={{fontSize:12,color:"var(--lb3)",marginTop:2,fontFamily:"var(--fz)"}}>剩余 {daysLeft} 天</div>
+      </div>
+      <button className="glass tap" onClick={()=>go("recon")} style={{padding:"16px",textAlign:"left",cursor:"pointer"}}>
+        <div style={{fontSize:12,color:"var(--blue)",fontFamily:"var(--fz)",display:"flex",alignItems:"center",gap:4}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          对账
+        </div>
+        <div style={{fontSize:15,fontWeight:600,color:"var(--blue)",marginTop:6,fontFamily:"var(--fz)"}}>核对余额</div>
+        <div style={{fontSize:12,color:"var(--lb3)",marginTop:2,fontFamily:"var(--fz)"}}>记录差额消费</div>
+      </button>
+    </div>
+
+    {/* Overspend: Transfer from savings */}
+    {isOver&&poolBal>0&&(
+      <button className="glass tap" onClick={()=>go("transfer")} style={{margin:"10px 16px 0",padding:"14px 16px",display:"flex",alignItems:"center",gap:12,width:"calc(100% - 32px)",cursor:"pointer"}}>
+        <div style={{width:36,height:36,borderRadius:10,background:"var(--orange)"+"20",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 7l-5-5-5 5"/></svg>
+        </div>
+        <div style={{flex:1,textAlign:"left"}}>
+          <div style={{fontSize:14,fontWeight:600,color:"var(--orange)",fontFamily:"var(--fz)"}}>预算超支 ¥{fmt(Math.abs(remaining))}</div>
+          <div style={{fontSize:12,color:"var(--lb2)",fontFamily:"var(--fz)"}}>从储蓄池转入补充 · 余额 ¥{fmt(poolBal)}</div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--lb3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    )}
+
+    {/* Total spending summary */}
+    {(spent>0||savSpent>0)&&(
+      <div className="glass-s" style={{margin:"10px 16px 0",padding:"12px 16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)"}}>本月总花费</span>
+          <span className="n" style={{fontSize:17,fontWeight:600,color:"var(--lb)"}}>¥{fmt(spent+savSpent)}</span>
+        </div>
+        {savSpent>0&&(
+          <div style={{fontSize:12,color:"var(--lb3)",marginTop:4,fontFamily:"var(--fz)"}}>
+            预算内 ¥{fmt(spent)} + 储蓄池 ¥{fmt(savSpent)}
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* Unrecorded days hint */}
+    {unrecDays!==null&&unrecDays>1&&(
+      <div className="glass-s" style={{margin:"10px 16px 0",padding:"12px 16px",fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)"}}>
+        上次记到 {lastDate.getMonth()+1}/{lastDate.getDate()} · 有 {unrecDays} 天未记
+      </div>
+    )}
+
+    {/* Category Spending */}
+    <div style={{margin:"20px 16px 0"}}>
+      <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",marginBottom:8}}>分类消费</div>
+      {sortedCats.length===0?(
+        <div className="glass" style={{padding:"24px",textAlign:"center",fontSize:14,color:"var(--lb3)",fontFamily:"var(--fz)"}}>本月还没有记录</div>
+      ):(
+        <div className="glass" style={{padding:"12px 16px"}}>
+          {sortedCats.map((c,i)=>{
+            const sp=catSpend[c.id]||0;
+            const cb=d.catBudgets[c.id]||0;
+            const cpct=cb>0?Math.min((sp/cb)*100,100):50;
+            return(<div key={c.id} style={{padding:"10px 0",borderTop:i>0?"0.5px solid var(--sep)":"none"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <CatIcon cat={c} size={28}/>
+                <span style={{flex:1,fontSize:14,fontFamily:"var(--fz)"}}>{c.name}</span>
+                <span className="n" style={{fontSize:15,fontWeight:600}}>¥{fmt(sp)}</span>
+                {cb>0&&<span style={{fontSize:12,color:"var(--lb3)"}}>/¥{fmt(cb)}</span>}
+              </div>
+              {cb>0&&<div className="trk" style={{marginTop:6,height:4}}><div style={{width:cpct+"%",background:cpct>90?'var(--red)':cpct>70?'var(--orange)':c.color}}/></div>}
+            </div>);
+          })}
+        </div>
+      )}
+    </div>
+
+    {/* More */}
+    <div style={{margin:"20px 16px 0"}}>
+      <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",marginBottom:8}}>更多</div>
+      <div className="glass" style={{overflow:"hidden"}}>
+        <button className="tap" onClick={()=>go("payment")} style={{display:"flex",alignItems:"center",padding:"14px 16px",width:"100%",textAlign:"left",fontSize:14,fontFamily:"var(--fz)",color:"var(--blue)"}}>
+          <span style={{flex:1}}>支付方式统计</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--lb3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <div style={{height:"0.5px",background:"var(--sep)",margin:"0 16px"}}/>
+        <button className="tap" onClick={()=>go("projects")} style={{display:"flex",alignItems:"center",padding:"14px 16px",width:"100%",textAlign:"left",fontSize:14,fontFamily:"var(--fz)",color:"var(--blue)"}}>
+          <span style={{flex:1}}>专项模块</span>
+          {d.projects.filter(p=>!p.done).length>0&&<span style={{fontSize:12,color:"var(--lb3)",marginRight:8}}>{d.projects.filter(p=>!p.done).length} 个进行中</span>}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--lb3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <div style={{height:"0.5px",background:"var(--sep)",margin:"0 16px"}}/>
+        <button className="tap" onClick={()=>go("history")} style={{display:"flex",alignItems:"center",padding:"14px 16px",width:"100%",textAlign:"left",fontSize:14,fontFamily:"var(--fz)",color:"var(--blue)"}}>
+          <span style={{flex:1}}>历史记录</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--lb3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+    </div>
+    <div style={{height:40}}/>
+  </div>);
+}
+
+/* ═══ TRANSFER FROM SAVINGS ═══ */
+function Transfer({d,s,gb}){
+  const[amt,setAmt]=useState("");
+  const mo=curMo();
+  const remaining=d.monthlyBudget+calcTransferIn(d.transfers,mo)-calcMonthSpent(d.entries,mo);
+  const deficit=remaining<0?Math.abs(remaining):0;
+  const poolBal=calcSavingsPoolBalance(d);
+
+  function doTransfer(){
+    const a=+amt;
+    if(a<=0||a>poolBal)return;
+    const t={id:uid(),date:new Date().toISOString(),amount:a,month:mo};
+    s({...d,transfers:[...(d.transfers||[]),t]});
+    gb();
+  }
+
+  return(<div style={S.page}>
+    <NavBar title="储蓄转入" onBack={gb}/>
+    <div style={{padding:"0 16px"}}>
+      <div className="glass" style={{padding:"20px",marginTop:12}}>
+        <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",marginBottom:4}}>当前超支金额</div>
+        <div className="n" style={{fontSize:28,fontWeight:600,color:"var(--red)"}}>¥{fmt(deficit)}</div>
+        <div style={{fontSize:12,color:"var(--lb3)",marginTop:4,fontFamily:"var(--fz)"}}>储蓄池余额 ¥{fmt(poolBal)}</div>
+      </div>
+
+      <div style={{marginTop:20}}>
+        <label style={S.label}>转入金额</label>
+        <input style={S.input} type="number" placeholder={`建议 ${fmt(Math.min(deficit,poolBal))}`} value={amt} onChange={e=>setAmt(e.target.value)}/>
+        <div style={{display:"flex",gap:8,marginTop:10}}>
+          {deficit>0&&deficit<=poolBal&&<button style={{...S.pill,background:"var(--blue)"+"15",color:"var(--blue)"}} onClick={()=>setAmt(String(deficit))}>补齐超支 ¥{fmt(deficit)}</button>}
+          {[500,1000,2000].filter(v=>v<=poolBal).map(v=><button key={v} style={S.pill} onClick={()=>setAmt(String(v))}>¥{v}</button>)}
+        </div>
+      </div>
+
+      <button style={{...S.btn,...S.btnP,marginTop:24,width:"100%"}} onClick={doTransfer} disabled={!+amt||+amt>poolBal}>
+        确认转入
+      </button>
+      <p style={{fontSize:12,color:"var(--lb3)",marginTop:12,textAlign:"center",fontFamily:"var(--fz)"}}>
+        转入后将增加本月可用预算，同时从储蓄池扣除对应金额
+      </p>
+    </div>
+  </div>);
+}
+
+/* ═══ HISTORICAL MONTH VIEW ═══ */
+function HistMonth({d,s,go,initMo}){
+  const[mo,setMo]=useState(initMo||prevMo(curMo()));
+  const[tab,setTab]=useState("home");// home or savings
+  const{y,m}=parseMo(mo);
+  const isCur=mo===curMo();
+
+  return(<div style={S.page}>
+    <NavBar title="历史月份" onBack={()=>go("home")}/>
+    {/* Month picker */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:20,padding:"8px 16px"}}>
+      <button className="tap" onClick={()=>setMo(prevMo(mo))} style={{padding:8}}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div style={{fontSize:20,fontWeight:600,fontFamily:"var(--fz)",minWidth:120,textAlign:"center"}}>{y}年{m}月</div>
+      <button className="tap" onClick={()=>{if(!isCur)setMo(nextMo(mo))}} style={{padding:8,opacity:isCur?.3:1}}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+    {/* Tab switch */}
+    <div style={{display:"flex",margin:"0 16px",background:"var(--fill)",borderRadius:10,padding:2}}>
+      {["home","savings"].map(t=>(
+        <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"8px 0",borderRadius:8,fontSize:13,fontFamily:"var(--fz)",fontWeight:tab===t?600:400,background:tab===t?"var(--card-solid)":"transparent",color:tab===t?"var(--lb)":"var(--lb2)",boxShadow:tab===t?"0 1px 3px rgba(0,0,0,.08)":"none"}}>
+          {t==="home"?"预算概览":"储蓄概览"}
+        </button>
+      ))}
+    </div>
+
+    {tab==="home"?<HistHomeTab d={d} mo={mo}/>:<HistSavTab d={d} mo={mo}/>}
+  </div>);
+}
+
+function HistHomeTab({d,mo}){
+  const{y,m}=parseMo(mo);
+  const me=getMonthEntries(d.entries,mo);
+  const spent=me.filter(e=>!e.fromSavings).reduce((s,e)=>s+e.amount,0);
+  const savSpent=me.filter(e=>e.fromSavings).reduce((s,e)=>s+e.amount,0);
+  const transferIn=calcTransferIn(d.transfers,mo);
+  const effectiveBudget=d.monthlyBudget+transferIn;
+  const remaining=effectiveBudget-spent;
+  const totalDays=daysInMonth(y,m);
+  const pct=effectiveBudget>0?Math.min((spent/effectiveBudget)*100,100):0;
+  const isOver=remaining<0;
+
+  const catSpend={};me.filter(e=>!e.fromSavings).forEach(e=>{catSpend[e.catId]=(catSpend[e.catId]||0)+e.amount});
+  const sortedCats=CATS.filter(c=>catSpend[c.id]>0).sort((a,b)=>(catSpend[b.id]||0)-(catSpend[a.id]||0));
+
+  return(<div style={{padding:"12px 16px"}}>
+    <div className="glass" style={{padding:"24px 20px",textAlign:"center"}}>
+      <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",marginBottom:8}}>{m}月结余</div>
+      <div className="n" style={{fontSize:40,fontWeight:700,letterSpacing:"-1px",color:isOver?"var(--red)":"var(--green)",lineHeight:1}}>
+        {isOver?"-":"+"}<span style={{fontSize:18,fontWeight:400}}>¥</span>{fmt(Math.abs(remaining))}
+      </div>
+      {transferIn>0&&<div style={{fontSize:12,color:"var(--blue)",marginTop:6,fontFamily:"var(--fz)"}}>含储蓄转入 ¥{fmt(transferIn)}</div>}
+      <div className="trk" style={{marginTop:14}}>
+        <div style={{width:pct+"%",background:isOver?"var(--red)":"var(--green)"}}/>
+      </div>
+      <div style={{fontSize:12,color:"var(--lb3)",marginTop:6,fontFamily:"var(--fz)"}}>
+        花费 ¥{fmt(spent)} / 预算 ¥{fmt(effectiveBudget)}
+      </div>
+    </div>
+
+    {(spent>0||savSpent>0)&&(
+      <div className="glass-s" style={{marginTop:10,padding:"12px 16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)"}}>当月总花费</span>
+          <span className="n" style={{fontSize:17,fontWeight:600,color:"var(--lb)"}}>¥{fmt(spent+savSpent)}</span>
+        </div>
+        {savSpent>0&&(
+          <div style={{fontSize:12,color:"var(--lb3)",marginTop:4,fontFamily:"var(--fz)"}}>
+            预算内 ¥{fmt(spent)} + 储蓄池 ¥{fmt(savSpent)}
+          </div>
+        )}
+      </div>
+    )}
+
+    {sortedCats.length>0&&(
+      <div style={{marginTop:16}}>
+        <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",marginBottom:8}}>分类消费</div>
+        <div className="glass" style={{padding:"12px 16px"}}>
+          {sortedCats.map((c,i)=>{
+            const sp=catSpend[c.id]||0;
+            const cb=d.catBudgets[c.id]||0;
+            return(<div key={c.id} style={{padding:"10px 0",borderTop:i>0?"0.5px solid var(--sep)":"none",display:"flex",alignItems:"center",gap:10}}>
+              <CatIcon cat={c} size={24}/>
+              <span style={{flex:1,fontSize:14,fontFamily:"var(--fz)"}}>{c.name}</span>
+              <span className="n" style={{fontSize:14,fontWeight:600}}>¥{fmt(sp)}</span>
+              {cb>0&&<span style={{fontSize:12,color:sp>cb?"var(--red)":"var(--lb3)"}}>{sp>cb?"超支":""}·{Math.round(sp/cb*100)}%</span>}
+            </div>);
+          })}
+        </div>
+      </div>
+    )}
+
+    {/* Entries list */}
+    <div style={{marginTop:16}}>
+      <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",marginBottom:8}}>消费明细 ({me.length}笔)</div>
+      <div className="glass" style={{padding:"4px 16px"}}>
+        {me.length===0?<div style={{padding:"20px 0",textAlign:"center",fontSize:14,color:"var(--lb3)",fontFamily:"var(--fz)"}}>无记录</div>:
+        me.sort((a,b)=>new Date(b.date)-new Date(a.date)).map((e,i)=>{
+          const c=CATS.find(c=>c.id===e.catId)||CATS[CATS.length-1];
+          return(<div key={e.id} style={{padding:"10px 0",borderTop:i>0?"0.5px solid var(--sep)":"none",display:"flex",alignItems:"center",gap:10}}>
+            <CatIcon cat={c} size={24}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontFamily:"var(--fz)"}}>{c.name}{e.sub?" · "+e.sub:""}</div>
+              <div style={{fontSize:12,color:"var(--lb3)",fontFamily:"var(--fz)"}}>{new Date(e.date).toLocaleDateString("zh-CN",{month:"numeric",day:"numeric"})}{e.fromSavings?" · 储蓄池":""}</div>
+            </div>
+            <span className="n" style={{fontSize:14,fontWeight:600}}>¥{fmt(e.amount)}</span>
+          </div>);
+        })}
+      </div>
+    </div>
+  </div>);
+}
+
+function HistSavTab({d,mo}){
+  const logs=getMonthSavingsLog(d.savingsLog,mo);
+  const deposits=logs.filter(l=>l.type==="deposit").reduce((s,l)=>s+l.amount,0);
+  const withdrawals=logs.filter(l=>l.type==="withdraw").reduce((s,l)=>s+l.amount,0);
+  const savEntries=d.entries.filter(e=>moOf(e.date)===mo&&e.fromSavings);
+  const savSpent=savEntries.reduce((s,e)=>s+e.amount,0);
+  const transfers=getMonthTransfers(d.transfers,mo);
+  const transferOut=transfers.reduce((s,t)=>s+t.amount,0);
+  const net=deposits-withdrawals-savSpent-transferOut;
+
+  return(<div style={{padding:"12px 16px"}}>
+    <div className="glass" style={{padding:"20px",textAlign:"center"}}>
+      <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",marginBottom:8}}>当月净储蓄</div>
+      <div className="n" style={{fontSize:36,fontWeight:700,color:net>=0?"var(--green)":"var(--red)",lineHeight:1}}>
+        {net>=0?"+":"-"}<span style={{fontSize:16,fontWeight:400}}>¥</span>{fmt(Math.abs(net))}
+      </div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+      <div className="glass" style={{padding:"14px"}}>
+        <div style={{fontSize:12,color:"var(--lb2)",fontFamily:"var(--fz)"}}>存入</div>
+        <div className="n" style={{fontSize:20,fontWeight:600,color:"var(--green)",marginTop:4}}>+¥{fmt(deposits)}</div>
+      </div>
+      <div className="glass" style={{padding:"14px"}}>
+        <div style={{fontSize:12,color:"var(--lb2)",fontFamily:"var(--fz)"}}>消耗</div>
+        <div className="n" style={{fontSize:20,fontWeight:600,color:"var(--red)",marginTop:4}}>-¥{fmt(withdrawals+savSpent+transferOut)}</div>
+      </div>
+    </div>
+
+    {/* Breakdown */}
+    <div style={{marginTop:16}}>
+      <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",marginBottom:8}}>消耗明细</div>
+      <div className="glass" style={{padding:"12px 16px"}}>
+        {withdrawals>0&&<div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:14,fontFamily:"var(--fz)"}}>
+          <span>手动取出</span><span className="n" style={{color:"var(--red)"}}>-¥{fmt(withdrawals)}</span>
+        </div>}
+        {savSpent>0&&<div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:14,fontFamily:"var(--fz)",borderTop:withdrawals>0?"0.5px solid var(--sep)":"none"}}>
+          <span>消费扣除</span><span className="n" style={{color:"var(--red)"}}>-¥{fmt(savSpent)}</span>
+        </div>}
+        {transferOut>0&&<div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:14,fontFamily:"var(--fz)",borderTop:"0.5px solid var(--sep)"}}>
+          <span>转入预算</span><span className="n" style={{color:"var(--orange)"}}>-¥{fmt(transferOut)}</span>
+        </div>}
+        {withdrawals===0&&savSpent===0&&transferOut===0&&<div style={{padding:"16px 0",textAlign:"center",fontSize:14,color:"var(--lb3)",fontFamily:"var(--fz)"}}>无消耗记录</div>}
+      </div>
+    </div>
+
+    {/* Viz bar */}
+    {(deposits>0||withdrawals+savSpent+transferOut>0)&&(
+      <div style={{marginTop:16}}>
+        <div className="sbar">
+          {deposits>0&&<div style={{width:Math.max(deposits/(deposits+withdrawals+savSpent+transferOut)*100,5)+"%",background:"var(--green)"}}/>}
+          {(withdrawals+savSpent+transferOut)>0&&<div style={{width:Math.max((withdrawals+savSpent+transferOut)/(deposits+withdrawals+savSpent+transferOut)*100,5)+"%",background:"var(--red)"}}/>}
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:11,color:"var(--lb3)",fontFamily:"var(--fz)"}}>
+          <span>存入 ¥{fmt(deposits)}</span>
+          <span>消耗 ¥{fmt(withdrawals+savSpent+transferOut)}</span>
+        </div>
+      </div>
+    )}
+  </div>);
+}
+
+/* ═══ SAVINGS PAGE ═══ */
+function Savings({d,s,go}){
+  const mo=curMo();
+  const poolBal=calcSavingsPoolBalance(d);
+  const logs=getMonthSavingsLog(d.savingsLog,mo);
+  const moDeposits=logs.filter(l=>l.type==="deposit").reduce((s,l)=>s+l.amount,0);
+  const moWithdrawals=logs.filter(l=>l.type==="withdraw").reduce((s,l)=>s+l.amount,0);
+  const moSavSpent=d.entries.filter(e=>moOf(e.date)===mo&&e.fromSavings).reduce((s,e)=>s+e.amount,0);
+  const moTransfers=calcTransferIn(d.transfers,mo);
+  const moNet=moDeposits-moWithdrawals-moSavSpent-moTransfers;
+  const goal=d.monthlySavingsGoal;
+  const goalPct=goal>0?Math.min((moDeposits/goal)*100,100):0;
+
+  const[showDeposit,setShowDeposit]=useState(false);
+  const[showWithdraw,setShowWithdraw]=useState(false);
+  const[amt,setAmt]=useState("");
+
+  function doDeposit(){
+    const a=+amt;if(a<=0)return;
+    const log={id:uid(),type:"deposit",amount:a,date:new Date().toISOString(),note:"手动存入"};
+    s({...d,savingsLog:[...d.savingsLog,log]});
+    setShowDeposit(false);setAmt("");
+  }
+  function doWithdraw(){
+    const a=+amt;if(a<=0||a>poolBal)return;
+    const log={id:uid(),type:"withdraw",amount:a,date:new Date().toISOString(),note:"手动取出"};
+    s({...d,savingsLog:[...d.savingsLog,log]});
+    setShowWithdraw(false);setAmt("");
+  }
+
+  return(<div style={S.page}>
+    <div style={{padding:"12px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div style={{fontSize:34,fontWeight:700,fontFamily:"var(--fz)",letterSpacing:"-0.5px"}}>储蓄</div>
+      <button className="tap" onClick={()=>go("savflow")} style={{fontSize:14,color:"var(--blue)",fontFamily:"var(--fz)"}}>
+        流水 ›
+      </button>
+    </div>
+
+    {/* Pool balance */}
+    <div className="glass" style={{margin:"16px 16px 0",padding:"24px 20px",textAlign:"center"}}>
+      <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",marginBottom:8}}>储蓄池余额</div>
+      <div className="n" style={{fontSize:44,fontWeight:700,letterSpacing:"-1px",lineHeight:1}}>
+        <span style={{fontSize:18,fontWeight:400}}>¥</span>{fmt(poolBal)}
+      </div>
+    </div>
+
+    {/* Actions */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,margin:"10px 16px 0"}}>
+      <button className="glass tap" onClick={()=>{setShowDeposit(true);setShowWithdraw(false);setAmt("")}} style={{padding:"14px",textAlign:"center",fontSize:15,fontWeight:600,color:"var(--green)",fontFamily:"var(--fz)",cursor:"pointer"}}>存入</button>
+      <button className="glass tap" onClick={()=>{setShowWithdraw(true);setShowDeposit(false);setAmt("")}} style={{padding:"14px",textAlign:"center",fontSize:15,fontWeight:600,color:"var(--red)",fontFamily:"var(--fz)",cursor:"pointer"}}>取出</button>
+    </div>
+
+    {/* Deposit/Withdraw modal inline */}
+    {(showDeposit||showWithdraw)&&(
+      <div className="glass" style={{margin:"10px 16px 0",padding:"16px"}}>
+        <div style={{fontSize:14,fontWeight:600,marginBottom:10,fontFamily:"var(--fz)"}}>{showDeposit?"存入储蓄":"取出储蓄"}</div>
+        <input style={S.input} type="number" placeholder="金额" value={amt} onChange={e=>setAmt(e.target.value)} autoFocus/>
+        <div style={{display:"flex",gap:8,marginTop:10}}>
+          <button style={{...S.btn,flex:1}} onClick={()=>{setShowDeposit(false);setShowWithdraw(false)}}>取消</button>
+          <button style={{...S.btn,...S.btnP,flex:2}} onClick={showDeposit?doDeposit:doWithdraw}>确认</button>
+        </div>
+      </div>
+    )}
+
+    {/* Monthly savings */}
+    <div className="glass" style={{margin:"16px 16px 0",padding:"16px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <span style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)"}}>本月储蓄</span>
+        <span className="n" style={{fontSize:20,fontWeight:600,color:moNet>=0?"var(--green)":"var(--red)"}}>{moNet>=0?"+":""}{moNet<0?"-":""}¥{fmt(Math.abs(moNet))}</span>
+      </div>
+      {goal>0&&(<>
+        <div className="trk" style={{marginBottom:6}}>
+          <div style={{width:goalPct+"%",background:"var(--green)"}}/>
+        </div>
+        <div style={{fontSize:12,color:"var(--lb3)",fontFamily:"var(--fz)"}}>目标 ¥{fmt(goal)} · 已存入 ¥{fmt(moDeposits)}</div>
+      </>)}
+
+      {/* Viz bar */}
+      {(moDeposits>0||moWithdrawals+moSavSpent+moTransfers>0)&&(
+        <div style={{marginTop:10}}>
+          <div className="sbar">
+            {moDeposits>0&&<div style={{width:Math.max(moDeposits/(Math.max(moDeposits,moWithdrawals+moSavSpent+moTransfers))*100,5)+"%",background:"var(--green)"}}/>}
+            {(moWithdrawals+moSavSpent+moTransfers)>0&&<div style={{width:Math.max((moWithdrawals+moSavSpent+moTransfers)/(Math.max(moDeposits,moWithdrawals+moSavSpent+moTransfers))*100,5)+"%",background:"var(--red)"}}/>}
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:11,color:"var(--lb3)",fontFamily:"var(--fz)"}}>
+            <span>存入 ¥{fmt(moDeposits)}</span>
+            <span>消耗 ¥{fmt(moWithdrawals+moSavSpent+moTransfers)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Breakdown */}
+      <div style={{marginTop:10,paddingTop:10,borderTop:"0.5px solid var(--sep)"}}>
+        {moWithdrawals>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"4px 0",fontFamily:"var(--fz)"}}><span style={{color:"var(--lb2)"}}>手动取出</span><span className="n" style={{color:"var(--red)"}}>-¥{fmt(moWithdrawals)}</span></div>}
+        {moSavSpent>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"4px 0",fontFamily:"var(--fz)"}}><span style={{color:"var(--lb2)"}}>消费扣除</span><span className="n" style={{color:"var(--red)"}}>-¥{fmt(moSavSpent)}</span></div>}
+        {moTransfers>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"4px 0",fontFamily:"var(--fz)"}}><span style={{color:"var(--lb2)"}}>转入预算</span><span className="n" style={{color:"var(--orange)"}}>-¥{fmt(moTransfers)}</span></div>}
+      </div>
+    </div>
+
+    {/* Transfer to budget shortcut */}
+    {calcMonthSpent(d.entries,curMo())>d.monthlyBudget+calcTransferIn(d.transfers,curMo())&&poolBal>0&&(
+      <button className="glass tap" onClick={()=>go("transfer")} style={{margin:"10px 16px 0",padding:"14px 16px",display:"flex",alignItems:"center",gap:12,width:"calc(100% - 32px)",cursor:"pointer"}}>
+        <div style={{width:32,height:32,borderRadius:8,background:"var(--orange)20",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" strokeWidth="2"><path d="M12 2v20M17 7l-5-5-5 5"/></svg>
+        </div>
+        <div style={{flex:1,textAlign:"left"}}>
+          <div style={{fontSize:14,fontWeight:600,color:"var(--orange)",fontFamily:"var(--fz)"}}>预算超支，转入补充</div>
+          <div style={{fontSize:12,color:"var(--lb2)",fontFamily:"var(--fz)"}}>从储蓄池转入当月预算</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--lb3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    )}
+
+    <div style={{height:40}}/>
+  </div>);
+}
+
+/* ═══ SAVINGS FLOW ═══ */
+function SavFlow({d,s,go}){
+  const allLogs=[];
+  (d.savingsLog||[]).forEach(l=>allLogs.push({...l,kind:"log"}));
+  (d.entries||[]).filter(e=>e.fromSavings).forEach(e=>allLogs.push({id:e.id,type:"expense",amount:e.amount,date:e.date,kind:"entry",catId:e.catId,sub:e.sub}));
+  (d.transfers||[]).forEach(t=>allLogs.push({...t,type:"transfer",kind:"transfer"}));
+  allLogs.sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+  return(<div style={S.page}>
+    <NavBar title="储蓄流水" onBack={()=>go("savings")}/>
+    <div style={{padding:"0 16px"}}>
+      {allLogs.length===0?<div className="glass" style={{padding:"32px",textAlign:"center",fontSize:14,color:"var(--lb3)",fontFamily:"var(--fz)"}}>暂无流水记录</div>:
+      <div className="glass" style={{padding:"4px 16px"}}>
+        {allLogs.map((l,i)=>{
+          const isIn=l.type==="deposit";
+          const label=l.type==="deposit"?"存入":l.type==="withdraw"?"取出":l.type==="transfer"?"转入预算":"消费扣除";
+          const c=l.catId?CATS.find(c=>c.id===l.catId):null;
+          return(<div key={l.id+i} style={{padding:"12px 0",borderTop:i>0?"0.5px solid var(--sep)":"none",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:32,height:32,borderRadius:8,background:(isIn?"var(--green)":"var(--red)")+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
+              {isIn?"↓":"↑"}
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontFamily:"var(--fz)"}}>{label}{c?" · "+c.name:""}</div>
+              <div style={{fontSize:12,color:"var(--lb3)",fontFamily:"var(--fz)"}}>{new Date(l.date).toLocaleDateString("zh-CN",{month:"numeric",day:"numeric"})}{l.note?" · "+l.note:""}</div>
+            </div>
+            <span className="n" style={{fontSize:14,fontWeight:600,color:isIn?"var(--green)":"var(--red)"}}>{isIn?"+":"-"}¥{fmt(l.amount)}</span>
+          </div>);
+        })}
+      </div>}
+    </div>
+  </div>);
+}
+
+/* ═══ ADD ENTRY ═══ */
+function Add({d,s,gb,pid}){
+  const[amt,setAmt]=useState("");
+  const[catId,setCatId]=useState("");
+  const[sub,setSub]=useState("");
+  const[payId,setPayId]=useState("wechat");
+  const[dateFrom,setDateFrom]=useState(new Date().toISOString().slice(0,10));
+  const[dateTo,setDateTo]=useState("");
+  const[note,setNote]=useState("");
+  const[fromSav,setFromSav]=useState(false);
+  const cat=CATS.find(c=>c.id===catId);
+
+  function submit(){
+    const a=+amt;if(a<=0||!catId)return;
+    const e={id:uid(),amount:a,catId,sub:sub||null,payId,date:dateFrom,dateTo:dateTo||null,note:note||null,fromSavings:fromSav,projectId:pid||null,createdAt:new Date().toISOString()};
+    s({...d,entries:[...d.entries,e]});
+    gb();
+  }
+
+  return(<div style={S.page}>
+    <NavBar title={pid?"专项记账":"记一笔"} onBack={gb}/>
+    <div style={{padding:"0 16px"}}>
+      {/* Amount */}
+      <div className="glass" style={{padding:"20px",marginTop:8}}>
+        <div style={{fontSize:12,color:"var(--lb2)",marginBottom:6,fontFamily:"var(--fz)"}}>金额</div>
+        <div style={{display:"flex",alignItems:"center"}}>
+          <span style={{fontSize:24,color:"var(--lb2)",marginRight:4}}>¥</span>
+          <input className="n" style={{border:"none",background:"none",fontSize:36,fontWeight:600,width:"100%",letterSpacing:"-0.5px"}} type="number" placeholder="0" value={amt} onChange={e=>setAmt(e.target.value)} autoFocus/>
+        </div>
+      </div>
+
+      {/* Category */}
+      <div style={{marginTop:12}}>
+        <div style={{fontSize:12,color:"var(--lb2)",marginBottom:6,fontFamily:"var(--fz)",paddingLeft:4}}>分类</div>
+        <div className="glass" style={{padding:"12px"}}>
+          <div className="cat-grid">
+            {CATS.map(c=>(
+              <button key={c.id} className={"cat-item tap"+(catId===c.id?" on":"")} onClick={()=>{setCatId(c.id);setSub("")}}>
+                <CatIcon cat={c} size={36}/>
+                <span style={{fontSize:11,color:catId===c.id?"var(--lb)":"var(--lb2)",fontFamily:"var(--fz)"}}>{c.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Subcategory */}
+      {cat&&cat.subs&&(
+        <div style={{marginTop:8}}>
+          <div style={{fontSize:12,color:"var(--lb2)",marginBottom:6,fontFamily:"var(--fz)",paddingLeft:4}}>细分</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {cat.subs.map(su=>(
+              <button key={su} className="tap" onClick={()=>setSub(su===sub?"":su)} style={{padding:"6px 14px",borderRadius:980,fontSize:13,fontFamily:"var(--fz)",background:sub===su?"var(--blue)":"var(--card-solid)",color:sub===su?"#fff":"var(--lb2)",border:"0.5px solid "+(sub===su?"var(--blue)":"var(--sep)")}}>
+                {su}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Date */}
+      <div className="glass" style={{padding:"12px 16px",marginTop:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",width:60}}>日期</span>
+          <input style={{...S.inputFlat,flex:1}} type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginTop:8}}>
+          <span style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)",width:60}}>截止</span>
+          <input style={{...S.inputFlat,flex:1}} type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} placeholder="可选"/>
+          {dateTo&&<button className="tap" onClick={()=>setDateTo("")} style={{fontSize:12,color:"var(--red)",fontFamily:"var(--fz)"}}>清除</button>}
+        </div>
+      </div>
+
+      {/* Payment */}
+      <div className="glass" style={{padding:"12px 16px",marginTop:8}}>
+        <div style={{fontSize:12,color:"var(--lb2)",marginBottom:8,fontFamily:"var(--fz)"}}>支付方式</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {PAYS.map(p=>(
+            <button key={p.id} className="tap" onClick={()=>setPayId(p.id)} style={{padding:"6px 14px",borderRadius:980,fontSize:13,fontFamily:"var(--fz)",background:payId===p.id?"var(--blue)":"transparent",color:payId===p.id?"#fff":"var(--lb2)",border:"0.5px solid "+(payId===p.id?"var(--blue)":"var(--sep)")}}>
+              {p.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* From savings toggle */}
+      <div className="glass" style={{padding:"12px 16px",marginTop:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:14,fontFamily:"var(--fz)"}}>从储蓄池扣除</div>
+          <div style={{fontSize:12,color:"var(--lb3)",fontFamily:"var(--fz)"}}>不计入月预算</div>
+        </div>
+        <div className={"toggle"+(fromSav?" on":"")} onClick={()=>setFromSav(!fromSav)}/>
+      </div>
+
+      {/* Note */}
+      <div className="glass" style={{padding:"12px 16px",marginTop:8}}>
+        <input style={{...S.inputFlat,width:"100%"}} placeholder="备注（可选）" value={note} onChange={e=>setNote(e.target.value)}/>
+      </div>
+
+      <button style={{...S.btn,...S.btnP,marginTop:20,width:"100%"}} onClick={submit} disabled={!+amt||!catId}>确认记账</button>
+    </div>
+    <div style={{height:40}}/>
+  </div>);
+}
+
+/* ═══ RECONCILIATION ═══ */
+function Recon({d,s,go}){
+  const[actual,setActual]=useState("");
+  const[entries,setEntries]=useState([]);
+  const[curCat,setCurCat]=useState("");
+  const[curAmt,setCurAmt]=useState("");
+  const[curSub,setCurSub]=useState("");
+  const[curPay,setCurPay]=useState("wechat");
+  const[curDateFrom,setCurDateFrom]=useState(new Date().toISOString().slice(0,10));
+  const[curDateTo,setCurDateTo]=useState("");
+  const[curFromSav,setCurFromSav]=useState(false);
+  const[step,setStep]=useState(0);
+
+  const mo=curMo();
+  const meSpent=getMonthEntries(d.entries,mo).reduce((s,e)=>s+e.amount,0);
+  const transferIn=calcTransferIn(d.transfers,mo);
+  const softBal=d.monthlyBudget+transferIn-meSpent+(d.initSavings||0);
+  const addedTotal=entries.reduce((s,e)=>s+e.amount,0);
+  const diff=actual?Math.max(0,softBal-(+actual)-addedTotal):0;
+
+  function addEntry(){
+    const a=+curAmt;if(a<=0||!curCat)return;
+    setEntries([...entries,{id:uid(),amount:a,catId:curCat,sub:curSub||null,payId:curPay,date:curDateFrom,dateTo:curDateTo||null,fromSavings:curFromSav}]);
+    setCurAmt("");setCurCat("");setCurSub("");setCurFromSav(false);setCurDateTo("");
+  }
+
+  function quickAssign(catId){
+    if(diff<=0)return;
+    setEntries([...entries,{id:uid(),amount:diff,catId,sub:null,payId:"wechat",date:curDateFrom,dateTo:curDateTo||null,fromSavings:false}]);
+  }
+
+  function finish(){
+    const allE=entries.map(e=>({...e,createdAt:new Date().toISOString(),projectId:null,note:"对账"}));
+    s({...d,entries:[...d.entries,...allE]});
+    go("home");
+  }
+
+  if(step===0)return(<div style={S.page}>
+    <NavBar title="对账" onBack={()=>go("home")}/>
+    <div style={{padding:"0 16px"}}>
+      <div className="glass" style={{padding:"20px",marginTop:12,textAlign:"center"}}>
+        <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)"}}>软件认为你还剩</div>
+        <div className="n" style={{fontSize:32,fontWeight:600,marginTop:4}}>¥{fmt(Math.max(0,softBal))}</div>
+      </div>
+      <label style={{...S.label,marginTop:16}}>你的实际余额是多少？</label>
+      <input style={S.input} type="number" placeholder="输入银行/支付宝等总余额" value={actual} onChange={e=>setActual(e.target.value)} autoFocus/>
+      {actual&&+actual<softBal&&(
+        <div style={{marginTop:12,padding:"14px",borderRadius:12,background:"var(--orange)"+"10",fontSize:14,fontFamily:"var(--fz)"}}>
+          有 <span className="n" style={{fontWeight:600,color:"var(--orange)"}}>¥{fmt(softBal-(+actual))}</span> 未记录消费
+        </div>
+      )}
+      <button style={{...S.btn,...S.btnP,marginTop:20,width:"100%"}} onClick={()=>+actual>0&&setStep(1)}>开始记录</button>
+    </div>
+  </div>);
+
+  const cat=CATS.find(c=>c.id===curCat);
+  return(<div style={S.page}>
+    <NavBar title="记录差额" onBack={()=>setStep(0)}/>
+    <div style={{padding:"0 16px"}}>
+      {/* Remaining diff */}
+      <div className="glass-s" style={{padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)"}}>还有未记录</span>
+        <span className="n" style={{fontSize:20,fontWeight:600,color:diff>0?"var(--orange)":"var(--green)"}}>{diff>0?"¥"+fmt(diff):"已平账"}</span>
+      </div>
+
+      {/* Recorded entries */}
+      {entries.length>0&&(
+        <div className="glass" style={{padding:"8px 16px",marginTop:8}}>
+          {entries.map((e,i)=>{const ec=CATS.find(c=>c.id===e.catId);return(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderTop:i>0?"0.5px solid var(--sep)":"none"}}>
+              <CatIcon cat={ec} size={24}/>
+              <span style={{flex:1,fontSize:13,fontFamily:"var(--fz)"}}>{ec.name}{e.sub?" · "+e.sub:""}{e.fromSavings?" · 储蓄池":""}</span>
+              <span className="n" style={{fontSize:14,fontWeight:600}}>¥{fmt(e.amount)}</span>
+              <button className="tap" onClick={()=>setEntries(entries.filter((_,j)=>j!==i))} style={{color:"var(--red)",fontSize:16,padding:"0 4px"}}>×</button>
+            </div>
+          )})}
+        </div>
+      )}
+
+      {/* Add new entry inline */}
+      {diff>0&&(<>
+        <div style={{marginTop:12,fontSize:12,color:"var(--lb2)",fontFamily:"var(--fz)",paddingLeft:4}}>记一笔</div>
+        <div className="glass" style={{padding:"12px",marginTop:4}}>
+          <div style={{display:"flex",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:18,color:"var(--lb2)"}}>¥</span>
+            <input className="n" style={{border:"none",background:"none",fontSize:24,fontWeight:600,width:"100%"}} type="number" placeholder="金额" value={curAmt} onChange={e=>setCurAmt(e.target.value)}/>
+          </div>
+          <div className="cat-grid">
+            {CATS.map(c=>(
+              <button key={c.id} className={"cat-item tap"+(curCat===c.id?" on":"")} onClick={()=>{setCurCat(c.id);setCurSub("")}} style={{padding:"6px 2px"}}>
+                <CatIcon cat={c} size={28}/>
+                <span style={{fontSize:10,fontFamily:"var(--fz)",color:curCat===c.id?"var(--lb)":"var(--lb3)"}}>{c.name}</span>
+              </button>
+            ))}
+          </div>
+          {cat&&cat.subs&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
+              {cat.subs.map(su=><button key={su} className="tap" onClick={()=>setCurSub(su===curSub?"":su)} style={{padding:"4px 10px",borderRadius:980,fontSize:12,fontFamily:"var(--fz)",background:curSub===su?"var(--blue)":"var(--fill)",color:curSub===su?"#fff":"var(--lb2)"}}>{su}</button>)}
+            </div>
+          )}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
+            <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:12,color:"var(--lb2)",fontFamily:"var(--fz)"}}>储蓄池扣</span>
+              <div className={"toggle"+(curFromSav?" on":"")} onClick={()=>setCurFromSav(!curFromSav)} style={{transform:"scale(.75)"}}/>
+            </div>
+          </div>
+          <button style={{...S.btn,...S.btnP,marginTop:10,width:"100%",padding:"10px"}} onClick={addEntry}>添加</button>
+        </div>
+
+        {/* Quick assign */}
+        <div style={{marginTop:10}}>
+          <div style={{fontSize:12,color:"var(--lb2)",fontFamily:"var(--fz)",marginBottom:6,paddingLeft:4}}>或一键分配剩余 ¥{fmt(diff)}</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {CATS.slice(0,4).map(c=>(
+              <button key={c.id} className="tap" style={{padding:"6px 12px",borderRadius:980,fontSize:12,fontFamily:"var(--fz)",background:"var(--card-solid)",border:"0.5px solid var(--sep)"}} onClick={()=>quickAssign(c.id)}>{c.name}</button>
+            ))}
+          </div>
+        </div>
+      </>)}
+
+      <button style={{...S.btn,...S.btnP,marginTop:20,width:"100%"}} onClick={finish} disabled={entries.length===0}>完成对账</button>
+    </div>
+    <div style={{height:40}}/>
+  </div>);
+}
+
+/* ═══ HISTORY ═══ */
+function Hist({d,s,go}){
+  const months=[...new Set(d.entries.map(e=>moOf(e.date)))].sort().reverse();
+  return(<div style={S.page}>
+    <NavBar title="历史记录" onBack={()=>go("home")}/>
+    <div style={{padding:"0 16px"}}>
+      {months.length===0?<div className="glass" style={{padding:"32px",textAlign:"center",fontSize:14,color:"var(--lb3)",fontFamily:"var(--fz)"}}>暂无记录</div>:
+      months.map(mo=>{
+        const me=d.entries.filter(e=>moOf(e.date)===mo);
+        const total=me.reduce((s,e)=>s+e.amount,0);
+        return(<button key={mo} className="glass tap" onClick={()=>go("histMonth",mo)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px",width:"100%",marginBottom:8,cursor:"pointer",textAlign:"left"}}>
+          <div>
+            <div style={{fontSize:16,fontWeight:600,fontFamily:"var(--fz)"}}>{moLabel(mo)}</div>
+            <div style={{fontSize:13,color:"var(--lb3)",fontFamily:"var(--fz)"}}>{me.length} 笔记录</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span className="n" style={{fontSize:16,fontWeight:600}}>¥{fmt(total)}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--lb3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </button>);
+      })}
+    </div>
+  </div>);
+}
+
+/* ═══ SETTINGS ═══ */
+function Sett({d,s,gb}){
+  const[budget,setBudget]=useState(String(d.monthlyBudget));
+  const[goal,setGoal]=useState(String(d.monthlySavingsGoal));
+  const[catBudgets,setCatBudgets]=useState({...d.catBudgets});
+  const[showCats,setShowCats]=useState(false);
+
+  function doSave(){
+    s({...d,monthlyBudget:+budget||d.monthlyBudget,monthlySavingsGoal:+goal||0,catBudgets});
+    gb();
+  }
+
+  return(<div style={S.page}>
+    <NavBar title="设置" onBack={gb}/>
+    <div style={{padding:"0 16px"}}>
+      <label style={S.label}>每月预算</label>
+      <input style={S.input} type="number" value={budget} onChange={e=>setBudget(e.target.value)}/>
+      <label style={{...S.label,marginTop:16}}>每月储蓄目标</label>
+      <input style={S.input} type="number" value={goal} onChange={e=>setGoal(e.target.value)}/>
+
+      <button className="tap" onClick={()=>setShowCats(!showCats)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",marginTop:20,padding:"14px 0",borderTop:"0.5px solid var(--sep)",fontSize:14,fontFamily:"var(--fz)"}}>
+        <span>分类预算</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--lb3)" strokeWidth="2" style={{transform:showCats?"rotate(90deg)":"none",transition:"transform .2s"}}><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      {showCats&&(
+        <div className="glass" style={{padding:"12px",marginBottom:8}}>
+          {CATS.map(c=>{
+            const v=catBudgets[c.id]||0;
+            const b=+budget;
+            const pct=b>0?((v/b)*100).toFixed(0):0;
+            return(<div key={c.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+              <CatIcon cat={c} size={24}/>
+              <span style={{flex:1,fontSize:13,fontFamily:"var(--fz)"}}>{c.name}</span>
+              <span style={{fontSize:11,color:"var(--lb3)",width:30,textAlign:"right"}}>{pct}%</span>
+              <input style={{...S.input,width:80,textAlign:"right",margin:0,padding:"4px 6px",fontSize:14}} type="number" value={v||""} onChange={e=>setCatBudgets({...catBudgets,[c.id]:+e.target.value||0})}/>
+            </div>);
+          })}
+          <button className="tap" onClick={()=>{const b=+budget;const recs={};CATS.forEach(c=>{recs[c.id]=Math.round(b*c.pct)});setCatBudgets(recs)}} style={{fontSize:12,color:"var(--blue)",marginTop:8,fontFamily:"var(--fz)"}}>恢复推荐比例</button>
+        </div>
+      )}
+
+      <button style={{...S.btn,...S.btnP,marginTop:20,width:"100%"}} onClick={doSave}>保存</button>
+
+      <div style={{marginTop:40,paddingTop:16,borderTop:"0.5px solid var(--sep)"}}>
+        <button style={{...S.btn,width:"100%",color:"var(--blue)",border:"1px solid var(--blue)",marginBottom:8}} onClick={()=>{
+          const json=JSON.stringify(d,null,2);
+          const blob=new Blob([json],{type:"application/json"});
+          const url=URL.createObjectURL(blob);
+          const a=document.createElement("a");a.href=url;a.download="budget-backup.json";a.click();URL.revokeObjectURL(url);
+        }}>导出备份</button>
+        <button style={{...S.btn,width:"100%",color:"var(--red)",border:"1px solid var(--red)",marginBottom:8}} onClick={()=>{
+          const input=document.createElement("input");input.type="file";input.accept=".json";
+          input.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d2=JSON.parse(ev.target.result);if(d2.entries){s(d2);alert("导入成功")}}catch{alert("文件格式错误")}};r.readAsText(f)};
+          input.click();
+        }}>导入数据</button>
+        <button style={{...S.btn,width:"100%",color:"var(--red)",border:"1px solid var(--red)"}} onClick={()=>{if(confirm("确定要清空所有数据吗？"))s(D())}}>清空所有数据</button>
+      </div>
+    </div>
+    <div style={{height:40}}/>
+  </div>);
+}
+
+/* ═══ PAYMENT BREAKDOWN ═══ */
+function PayB({d,gb}){
+  const mo=curMo();
+  const me=getMonthEntries(d.entries,mo);
+  const byPay={};me.forEach(e=>{byPay[e.payId||"other"]=(byPay[e.payId||"other"]||0)+e.amount});
+  const total=me.reduce((s,e)=>s+e.amount,0);
+  return(<div style={S.page}>
+    <NavBar title="支付方式统计" onBack={gb}/>
+    <div style={{padding:"0 16px"}}>
+      <div className="glass" style={{padding:"12px 16px"}}>
+        {PAYS.map((p,i)=>{
+          const amt=byPay[p.id]||0;if(amt===0)return null;
+          const pct=total>0?((amt/total)*100).toFixed(0):0;
+          return(<div key={p.id} style={{padding:"10px 0",borderTop:i>0?"0.5px solid var(--sep)":"none",display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:14,fontFamily:"var(--fz)",flex:1}}>{p.name}</span>
+            <span style={{fontSize:12,color:"var(--lb3)"}}>{pct}%</span>
+            <span className="n" style={{fontSize:15,fontWeight:600}}>¥{fmt(amt)}</span>
+          </div>);
+        })}
+        {total===0&&<div style={{padding:"20px",textAlign:"center",fontSize:14,color:"var(--lb3)",fontFamily:"var(--fz)"}}>本月无记录</div>}
+      </div>
+    </div>
+  </div>);
+}
+
+/* ═══ PROJECTS ═══ */
+function ProjL({d,s,go}){
+  const[showNew,setShowNew]=useState(false);
+  const[name,setName]=useState("");
+  const[budget,setBudget]=useState("");
+  function create(){
+    if(!name)return;
+    const p={id:uid(),name,budget:+budget||0,done:false,createdAt:new Date().toISOString()};
+    s({...d,projects:[...d.projects,p]});
+    setShowNew(false);setName("");setBudget("");
+  }
+  return(<div style={S.page}>
+    <NavBar title="专项模块" onBack={()=>go("home")}/>
+    <div style={{padding:"0 16px"}}>
+      {d.projects.map(p=>{
+        const pe=d.entries.filter(e=>e.projectId===p.id);
+        const spent=pe.reduce((s,e)=>s+e.amount,0);
+        return(<button key={p.id} className="glass tap" onClick={()=>go("project",p.id)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px",width:"100%",marginBottom:8,cursor:"pointer",textAlign:"left"}}>
+          <div>
+            <div style={{fontSize:15,fontWeight:600,fontFamily:"var(--fz)"}}>{p.name}{p.done?" ✓":""}</div>
+            <div style={{fontSize:13,color:"var(--lb3)",fontFamily:"var(--fz)"}}>{pe.length} 笔 · ¥{fmt(spent)}{p.budget>0?" / ¥"+fmt(p.budget):""}</div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--lb3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>);
+      })}
+      {showNew?(
+        <div className="glass" style={{padding:"16px"}}>
+          <input style={S.input} placeholder="专项名称" value={name} onChange={e=>setName(e.target.value)} autoFocus/>
+          <input style={{...S.input,marginTop:8}} type="number" placeholder="预算（可选）" value={budget} onChange={e=>setBudget(e.target.value)}/>
+          <div style={{display:"flex",gap:8,marginTop:10}}>
+            <button style={{...S.btn,flex:1}} onClick={()=>setShowNew(false)}>取消</button>
+            <button style={{...S.btn,...S.btnP,flex:2}} onClick={create}>创建</button>
+          </div>
+        </div>
+      ):(
+        <button style={{...S.btn,...S.btnP,width:"100%",marginTop:8}} onClick={()=>setShowNew(true)}>新建专项</button>
+      )}
+    </div>
+  </div>);
+}
+
+function ProjD({d,s,go,pid}){
+  const p=d.projects.find(p=>p.id===pid);
+  if(!p)return<div style={S.page}><NavBar title="未找到" onBack={()=>go("projects")}/></div>;
+  const pe=d.entries.filter(e=>e.projectId===pid);
+  const spent=pe.reduce((s,e)=>s+e.amount,0);
+  const savSpent=pe.filter(e=>e.fromSavings).reduce((s,e)=>s+e.amount,0);
+  return(<div style={S.page}>
+    <NavBar title={p.name} onBack={()=>go("projects")}/>
+    <div style={{padding:"0 16px"}}>
+      <div className="glass" style={{padding:"20px",textAlign:"center"}}>
+        <div style={{fontSize:13,color:"var(--lb2)",fontFamily:"var(--fz)"}}>已花费</div>
+        <div className="n" style={{fontSize:32,fontWeight:600,marginTop:4}}>¥{fmt(spent)}</div>
+        {p.budget>0&&(<>
+          <div className="trk" style={{marginTop:10}}><div style={{width:Math.min(spent/p.budget*100,100)+"%",background:spent>p.budget?"var(--red)":"var(--blue)"}}/></div>
+          <div style={{fontSize:12,color:"var(--lb3)",marginTop:4,fontFamily:"var(--fz)"}}>预算 ¥{fmt(p.budget)}</div>
+        </>)}
+        {savSpent>0&&<div style={{fontSize:12,color:"var(--orange)",marginTop:4,fontFamily:"var(--fz)"}}>其中储蓄池支出 ¥{fmt(savSpent)}</div>}
+      </div>
+
+      <div style={{display:"flex",gap:8,marginTop:12}}>
+        <button style={{...S.btn,...S.btnP,flex:1}} onClick={()=>go("add",pid)}>记一笔</button>
+        <button style={{...S.btn,flex:1,color:p.done?"var(--green)":"var(--lb2)",border:"1px solid var(--sep)"}} onClick={()=>{
+          const ps=d.projects.map(pp=>pp.id===pid?{...pp,done:!pp.done}:pp);
+          s({...d,projects:ps});
+        }}>{p.done?"重新开启":"标记完成"}</button>
+      </div>
+
+      {pe.length>0&&(
+        <div className="glass" style={{padding:"8px 16px",marginTop:12}}>
+          {pe.sort((a,b)=>new Date(b.date)-new Date(a.date)).map((e,i)=>{
+            const c=CATS.find(c=>c.id===e.catId)||CATS[CATS.length-1];
+            return(<div key={e.id} style={{padding:"10px 0",borderTop:i>0?"0.5px solid var(--sep)":"none",display:"flex",alignItems:"center",gap:8}}>
+              <CatIcon cat={c} size={24}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontFamily:"var(--fz)"}}>{c.name}{e.sub?" · "+e.sub:""}</div>
+                <div style={{fontSize:11,color:"var(--lb3)",fontFamily:"var(--fz)"}}>{new Date(e.date).toLocaleDateString("zh-CN",{month:"numeric",day:"numeric"})}{e.fromSavings?" · 储蓄池":""}</div>
+              </div>
+              <span className="n" style={{fontSize:14,fontWeight:600}}>¥{fmt(e.amount)}</span>
+            </div>);
+          })}
+        </div>
+      )}
+    </div>
+  </div>);
+}
+
+/* ═══ NAV BAR ═══ */
+function NavBar({title,onBack}){
+  return(<div style={{display:"flex",alignItems:"center",padding:"8px 16px",gap:8}}>
+    <button className="tap" onClick={onBack} style={{display:"flex",alignItems:"center",gap:4,color:"var(--blue)",fontSize:14,fontFamily:"var(--fz)",padding:"4px 0"}}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回
+    </button>
+    <span style={{flex:1,textAlign:"center",fontSize:17,fontWeight:600,fontFamily:"var(--fz)",letterSpacing:"-0.2px"}}>{title}</span>
+    <span style={{width:50}}/>
+  </div>);
+}
+
+/* ═══ STYLES ═══ */
+const S={
+  page:{minHeight:"100vh",paddingBottom:20},
+  setupWrap:{padding:"60px 24px 40px",maxWidth:400,margin:"0 auto"},
+  label:{display:"block",fontSize:13,color:"var(--lb2)",marginBottom:6,fontFamily:"var(--fz)"},
+  input:{display:"block",width:"100%",padding:"12px 14px",borderRadius:12,border:"none",background:"var(--fill)",fontSize:16,fontFamily:"var(--fn)",color:"var(--lb)"},
+  inputFlat:{border:"none",background:"none",fontSize:14,fontFamily:"var(--fs)",color:"var(--lb)",padding:"4px 0"},
+  btn:{display:"block",padding:"14px",borderRadius:14,fontSize:15,fontWeight:600,fontFamily:"var(--fz)",textAlign:"center",background:"var(--card-solid)",border:"1px solid var(--sep)",color:"var(--lb)"},
+  btnP:{background:"var(--blue)",color:"#fff",border:"1px solid var(--blue)"},
+  pill:{padding:"6px 14px",borderRadius:980,fontSize:13,fontFamily:"var(--fz)",background:"var(--fill)",border:"none",color:"var(--lb2)"},
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
